@@ -12,7 +12,7 @@ for (const mod of modules) {
     test.beforeEach(async ({ page }) => {
       const session = new SessionPage(page);
       await page.goto("/");
-      await session.selectServer(server);
+      // await session.selectServer(server);
       await session.selectModule(mod);
       await page.waitForURL(new RegExp(`/${mod.key}/`), { timeout: 30_000 });
     });
