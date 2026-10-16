@@ -1,0 +1,68 @@
+name: Playwright Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag test (@sanity, @crud, @seed)'
+        default: '@sanity'
+      base_url:
+        description: 'URL aplikasi yang dites'
+        required: true
+      run_id:
+        description: 'ID run dari aplikasi test management (opsional)'
+        required: false
+
+concurrency:
+  group: playwright-${{ inputs.base_url }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: mcr.microsoft.com/playwright:v1.50.0-jammy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Jalankan test
+        env:
+          CI: 'true'
+          BASE_URL: ${{ inputs.base_url }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        # setup (login) selalu ikut jalan karena menjadi dependency project chromium
+        run: npx playwright test --grep "${{ inputs.tag }}"
+        continue-on-error: true
+
+      - name: Kirim hasil ke aplikasi test management
+        if: always()
+        env:
+          TM_WEBHOOK_URL: ${{ secrets.TM_WEBHOOK_URL }}
+          TM_TOKEN: ${{ secrets.TM_TOKEN }}
+        run: |
+          if [ -z "$TM_WEBHOOK_URL" ]; then
+            echo "TM_WEBHOOK_URL tidak diset, lewati pengiriman hasil."
+            exit 0
+          fi
+          curl -sS -X POST "$TM_WEBHOOK_URL" \
+            -H "Authorization: Bearer $TM_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-Run-Id: ${{ inputs.run_id }}" \
+            -d @results.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: |
+            playwright-report
+            allure-results
+            results.json
+          retention-days: 14
