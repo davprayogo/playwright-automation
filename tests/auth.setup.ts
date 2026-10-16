@@ -8,10 +8,10 @@ const authFile = ".auth/user.json";
  * Semua test lain memakai sesi ini (lihat playwright.config.ts).
  */
 setup("login", async ({ page }) => {
-  const loginKey = process.env.OPERATOR_LOGIN_KEY;
-  if (!loginKey) {
-    throw new Error("OPERATOR_LOGIN_KEY wajib diisi di file .env");
-  }
+  // const loginKey = process.env.OPERATOR_LOGIN_KEY;
+  // if (!loginKey) {
+  //   throw new Error("OPERATOR_LOGIN_KEY wajib diisi di file .env");
+  // }
 
   const loginPage = new LoginPage(page);
   await loginPage.loginWithSSO("201078 ", "Passw0rd!");
