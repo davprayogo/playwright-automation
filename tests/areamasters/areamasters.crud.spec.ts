@@ -25,12 +25,12 @@ test.describe.serial("@crud Area Masters", () => {
   //   await session.selectModulebyText("WMS");
   //   await page.waitForURL(new RegExp(`/wms/`), { timeout: 30_000 });
   // });
-  test("Create", async ({ areaMastersPage, page }, testInfo) => {
+  test("Create Area Master", async ({ areaMastersPage, page }, testInfo) => {
     await areaMastersPage.open();
     await areaMastersPage.create(dataCreateAreaMaster);
     await attachScreenshot(page, testInfo, "Area Masters - setelah Create");
   });
-  test("Update", async ({ areaMastersPage, page }, testInfo) => {
+  test("Update Area Master", async ({ areaMastersPage, page }, testInfo) => {
     await areaMastersPage.open();
     await areaMastersPage.update(
       dataCreateAreaMaster.name,
@@ -38,7 +38,7 @@ test.describe.serial("@crud Area Masters", () => {
     );
     await attachScreenshot(page, testInfo, "Area Masters - setelah Update");
   });
-  test("Delete", async ({ areaMastersPage, page }, testInfo) => {
+  test("Delete Area Master", async ({ areaMastersPage, page }, testInfo) => {
     await areaMastersPage.open();
     await areaMastersPage.delete([DataUpdateAreaMaster.name]);
     await attachScreenshot(page, testInfo, "Area Masters - setelah Delete");
