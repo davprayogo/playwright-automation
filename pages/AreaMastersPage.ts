@@ -3,7 +3,7 @@ import { BasePage } from "./BasePage";
 import type { AreaMaster } from "@data/wms/areaMaster";
 
 export class AreaMastersPage extends BasePage {
-  readonly path = "/wms/master-data/area-masters";
+  readonly path = "/master-data/plant-structures/area-masters";
 
   private inputName = () => this.page.getByTestId("am-name-input");
   private inputDescription = () =>

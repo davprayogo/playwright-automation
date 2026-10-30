@@ -23,12 +23,6 @@ export const modules: ModuleDef[] = [
     menus: [
       {
         group: "Master Data",
-        path: "/mes/master-data/unit-identities",
-        name: "Unit Identities",
-        heading: "Unit Identities",
-      },
-      {
-        group: "Master Data",
         path: "/mes/master-data/material-masters",
         name: "Material Masters",
         heading: "Material Masters",
@@ -47,51 +41,9 @@ export const modules: ModuleDef[] = [
       },
       {
         group: "Master Data",
-        path: "/mes/master-data/process-masters",
-        name: "Process Masters",
-        heading: "Process Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/device-masters",
-        name: "Device Masters",
-        heading: "Device Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/model-masters",
-        name: "Model Masters",
-        heading: "Model Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/production-lines",
-        name: "Production Lines",
-        heading: "Production Lines",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/material-types",
-        name: "Material Types",
-        heading: "Material Types",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/material-categories",
-        name: "Material Categories",
-        heading: "Material Categories",
-      },
-      {
-        group: "Master Data",
         path: "/mes/master-data/bill-of-materials",
         name: "Bill of Materials",
         heading: "Bill of Materials",
-      },
-      {
-        group: "Master Data",
-        path: "/mes/master-data/station-masters",
-        name: "Station Masters",
-        heading: "Station Masters",
       },
       {
         group: "Master Data",
@@ -126,45 +78,9 @@ export const modules: ModuleDef[] = [
     menus: [
       {
         group: "Master Data",
-        path: "/wms/master-data/area-masters",
-        name: "Area Masters",
-        heading: "Area Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/wms/master-data/storage-locations",
-        name: "Storage Locations",
-        heading: "Storage Locations",
-      },
-      {
-        group: "Master Data",
-        path: "/wms/master-data/rack-masters",
-        name: "Rack Masters",
-        heading: "Rack Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/wms/master-data/bin-types",
-        name: "Bin Types",
-        heading: "Bin Types",
-      },
-      {
-        group: "Master Data",
         path: "/wms/master-data/bin-masters",
         name: "Bin Masters",
         heading: "Bin Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/wms/master-data/equipment-masters",
-        name: "Equipment Masters",
-        heading: "Equipment Masters",
-      },
-      {
-        group: "Master Data",
-        path: "/wms/master-data/digi-tag-masters",
-        name: "Digi Tag Masters",
-        heading: "Digi Tag Masters",
       },
       {
         group: "Reporting",
@@ -261,6 +177,86 @@ export const modules: ModuleDef[] = [
         name: "Email Logs",
         heading: "Email Logs",
       },
+    ],
+  },
+  {
+    key: "master-data",
+    name: "Master Data",
+    buttonLabel: "MASTER-DATA",
+    menus: [
+      {
+        group: "Configurations",
+        path: "/master-data/configurations/digi-tag-masters",
+        name: "Digi Tag Masters",
+        heading: "Digi Tag Masters",
+      },
+      {
+        group: "Equipments",
+        path: "/master-data/equipments/equipment-masters",
+        name: "Equipment Masters",
+        heading: "Equipment Masters",
+      },
+      {
+        group: "Manufacturing Processes",
+        path: "/master-data/manufacturing-processes/process-masters",
+        name: "Process Masters",
+        heading: "Process Masters",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/area-masters",
+        name: "Area Masters",
+        heading: "Area Masters",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/storage-locations",
+        name: "Storage Locations",
+        heading: "Storage Locations",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/rack-masters",
+        name: "Rack Masters",
+        heading: "Rack Masters",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/bin-masters",
+        name: "Bin Masters",
+        heading: "Bin Masters",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/production-lines",
+        name: "Production Lines",
+        heading: "Production Lines",
+      },
+      {
+        group: "Plant Structures",
+        path: "/master-data/plant-structures/workstations",
+        name: "Workstations",
+        heading: "Workstations",
+      },
+      {
+        group: "Product Masters",
+        path: "/master-data/product-masters/model-masters",
+        name: "Model Masters",
+        heading: "Model Masters",
+      },
+      {
+        group: "Product Masters",
+        path: "/master-data/product-masters/material-types",
+        name: "Material Types",
+        heading: "Material Types",
+      },
+      {
+        group: "Product Masters",
+        path: "/master-data/product-masters/material-identities",
+        name: "Material Identities",
+        heading: "Material Identities",
+      },
+      // tambah menu MES lain di sini
     ],
   },
 
