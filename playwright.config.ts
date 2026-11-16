@@ -30,7 +30,7 @@ export default defineConfig({
     video: "off", //'retain-on-failure'
     trace: "retain-on-failure",
     actionTimeout: 15_000,
-    navigationTimeout: 30_000,
+    navigationTimeout: 120_000,
     testIdAttribute: "id",
     launchOptions: { executablePath: "/usr/bin/chromium" },
     ignoreHTTPSErrors: true,

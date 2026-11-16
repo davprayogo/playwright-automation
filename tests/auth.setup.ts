@@ -14,7 +14,7 @@ setup("login", async ({ page }) => {
   // }
 
   const loginPage = new LoginPage(page);
-  // await loginPage.loginWithSSO("badge", "passw0rd");
+  // await loginPage.loginWithSSO("201078", "Passw0rd!");
   await loginPage.loginWithOperatorKey("d368d434134c45738ef2e86bfcee9dd7");
   await loginPage.expectLoggedIn();
 

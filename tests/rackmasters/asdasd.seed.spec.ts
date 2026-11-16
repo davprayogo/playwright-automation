@@ -11,9 +11,9 @@ import { SessionPage } from "@pages/SessionPage";
  */
 const count = Number(process.env.SEED_COUNT ?? 10);
 
-test.describe("@seed AreaMasters", () => {
+test.describe("@seed Adadeh", () => {
   for (let i = 1; i <= count; i++) {
-    test(`@seed buat AreaMasters #${i}`, async ({ areaMastersPage, page }) => {
+    test(`@seed buat adadeh #${i}`, async ({ areaMastersPage, page }) => {
       await areaMastersPage.open();
       await areaMastersPage.create({
         name: uniqueName(`Area-${i}`),
