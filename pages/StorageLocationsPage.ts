@@ -1,58 +1,113 @@
-import { expect } from "@playwright/test";
-import { BasePage } from "./BasePage";
-import type { StorageLocation } from "@data/wms/storageLocations";
+import { BasePage, type DetailFieldMap } from "./BasePage";
+import type { StorageLocation } from "@data/masterdata/StorageLocations";
+
+/**
+ * Field shown as the detail view H6 title — it has no label/value row.
+ * FSD MOM-113 does not name the title field: Name is assumed.
+ */
+const DETAIL_TITLE_FIELD = "name" as const;
+
+type TextField = Exclude<keyof StorageLocation, "binManaged">;
+
+/** Detail view label/value rows — FSD MOM-113 Section 7.5.2, minus the title field and Bin Managed (Yes/No). */
+const DETAIL_LABELS: Record<
+  Exclude<TextField, typeof DETAIL_TITLE_FIELD>,
+  string
+> = {
+  area: "Area",
+  sapReference: "SAP Reference",
+  sapStatus: "SAP Status",
+  description: "Description",
+  remark: "Remark",
+};
+
+const DETAIL_FIELDS: DetailFieldMap<Pick<StorageLocation, TextField>> = {
+  titleField: DETAIL_TITLE_FIELD,
+  labels: DETAIL_LABELS,
+};
 
 export class StorageLocationsPage extends BasePage {
-  readonly path = "/wms/master-data/storage-locations";
+  readonly path = "/master-data/plant-structures/storage-locations";
 
+  // Test ids follow the Production Line toggle seen in the UI:
+  // {prefix}-{field name in the data model, kebab-case}-input. Prefix "sl" is assumed.
+  // Active is read only: no input locator.
+  private inputArea = () => this.page.getByTestId("sl-area-master-input");
   private inputName = () => this.page.getByTestId("sl-name-input");
-  private inputDecription = () => this.page.getByTestId("am-description-input");
-  private inputAreaMaster = () => this.page.getByTestId("sl-area-master-input");
-  private inputSapRefrence = () =>
+  private inputSapReference = () =>
     this.page.getByTestId("sl-sap-reference-input");
   private inputSapStatus = () => this.page.getByTestId("sl-sap-status-input");
-  private inputRemarks = () => this.page.getByTestId("am-remarks-input");
+  private inputDescription = () =>
+    this.page.getByTestId("am-description-input");
+  private inputRemark = () => this.page.getByTestId("am-remark-input");
+  /** Toggle field id (see BasePage.setToggle). */
+  private readonly toggleBinManaged = "sl-is-bin-managed";
 
-  private async fillForm(data: StorageLocation) {
-    await this.inputName().fill(data.name);
-    await this.selectOptions(this.inputAreaMaster, data.areaMaster);
-    await this.inputDecription().fill(data.description ?? "");
-    await this.inputSapRefrence().fill(data.sapReference ?? "");
-    await this.inputSapStatus().fill(data.sapStatus ?? "");
-    await this.inputRemarks().fill(data.remarks ?? "");
-    await this.inputRemarks().fill(data.remarks ?? "");
-  }
+  // ---------- Navigation ----------
 
   async open() {
     await this.goto(this.path);
     await this.expectTableLoaded();
   }
 
+  async openDetail(name: string) {
+    await this.open();
+    await this.openDetailByColumn("Name", name);
+    await this.expectDetailOpened(name);
+  }
+
+  // ---------- Actions ----------
+
   async create(data: StorageLocation) {
     await this.openCreatePage();
     await this.fillForm(data);
     await this.clickSave();
     await this.confirmDialog("Save");
-    await expect(
-      this.page.getByRole("heading", { name: data.name }),
-    ).toBeVisible();
+    await this.expectDetailOpened(data.name);
   }
 
-  async update(oldValue: string, data: StorageLocation) {
-    await this.openDetailByColumn("Name", oldValue);
-    await this.clickEdit();
-    await this.fillForm(data);
-    await this.page.waitForTimeout(2000);
-    await this.clickSave();
-    await this.confirmDialog("Save");
-    await expect(
-      this.page.getByRole("heading", { name: data.name }),
-    ).toBeVisible();
-  }
-
-  async delete(values: string[]) {
-    await this.selectRowsByColumn("Name", values);
+  /** Delete from the list (FR-110). Rows must be selected first. Names must be unique in the list. */
+  async delete(names: string[], opts: { confirmMessage?: string } = {}) {
+    await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
     await this.confirmDialog("Delete");
+    for (const name of names) await this.expectNotInList(name);
+  }
+
+  // ---------- Assertions ----------
+
+  /** Field undefined = not checked, "" = empty (UI "-"). Name is checked on the H6 title. */
+  async expectDetail(expected: Partial<Pick<StorageLocation, TextField>>) {
+    await this.expectDetailFields(expected, DETAIL_FIELDS);
+  }
+
+  async expectInList(name: string, area?: string) {
+    await this.expectRowInList(...(area ? [name, area] : [name]));
+  }
+
+  async expectNotInList(name: string, area?: string) {
+    await this.expectRowNotInList(...(area ? [name, area] : [name]));
+  }
+
+  // ---------- Helpers ----------
+
+  /** Field undefined = not touched. */
+  private async fillForm(data: Partial<StorageLocation>) {
+    if (data.area !== undefined)
+      await this.selectOptions(this.inputArea, data.area);
+    const text = [
+      [this.inputName, data.name],
+      [this.inputSapReference, data.sapReference],
+      [this.inputSapStatus, data.sapStatus],
+      [this.inputDescription, data.description],
+      [this.inputRemark, data.remark],
+    ] as const;
+    for (const [input, value] of text) {
+      if (value !== undefined) await input().fill(value);
+    }
+    if (data.binManaged !== undefined) {
+      await this.setToggle(this.toggleBinManaged, data.binManaged);
+    }
   }
 }

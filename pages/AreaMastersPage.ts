@@ -1,6 +1,28 @@
-import { expect } from "@playwright/test";
-import { BasePage } from "./BasePage";
+import { BasePage, type DetailFieldMap } from "./BasePage";
 import type { AreaMaster } from "@data/wms/areaMaster";
+
+/** Field shown as the detail view H6 title — it has no label/value row. */
+const DETAIL_TITLE_FIELD = "name" as const;
+
+/**
+ * Detail view label/value rows — field names from FSD MOM-98 Section 7.5.2,
+ * minus the title field (shown only as H6).
+ */
+const DETAIL_LABELS: Record<
+  Exclude<keyof AreaMaster, typeof DETAIL_TITLE_FIELD>,
+  string
+> = {
+  factory: "Factory",
+  floor: "Floor",
+  division: "Division",
+  description: "Description",
+  remark: "Remark",
+};
+
+const DETAIL_FIELDS: DetailFieldMap<AreaMaster> = {
+  titleField: DETAIL_TITLE_FIELD,
+  labels: DETAIL_LABELS,
+};
 
 export class AreaMastersPage extends BasePage {
   readonly path = "/master-data/plant-structures/area-masters";
@@ -13,8 +35,6 @@ export class AreaMastersPage extends BasePage {
   private inputDescription = () =>
     this.page.getByTestId("am-description-input");
   private inputRemark = () => this.page.getByTestId("am-remark-input");
-
-  // private dialog = () => this.page.getByRole("dialog");
 
   // ---------- Navigation ----------
 
@@ -49,28 +69,24 @@ export class AreaMastersPage extends BasePage {
     await this.fillForm(data);
     await this.clickSave();
     await this.confirmDialog("Save");
-    await this.expectNoDuplicateModal();
+    await this.expectNoDialog("Duplicate Record");
     await this.expectDetailOpened(data.name ?? oldName);
   }
 
-  /** Delete from the list. Rows must be selected first (rule 9). */
+  /** Delete from the list. Rows must be selected first. */
   async delete(names: string[], opts: { confirmMessage?: string } = {}) {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
-    if (opts.confirmMessage) {
-      await expect(this.dialog()).toContainText(opts.confirmMessage);
-    }
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
     await this.confirmDialog("Delete");
-    for (const name of names) {
-      await this.expectNotInList(name);
-    }
+    for (const name of names) await this.expectNotInList(name);
   }
 
-  /** Delete from the area page (FR-80). */
+  /** Delete from the area page (FR-80): More → Delete → confirm. */
   async deleteFromDetail(name: string) {
     await this.openDetail(name);
-    await this.clickDelete();
-    await expect(this.dialog()).toContainText(`Delete area ${name.trim()}?`);
+    await this.clickDetailDelete();
+    await this.expectDialogText(`Delete 1 Records?`);
     await this.confirmDialog("Delete");
     await this.open();
     await this.expectNotInList(name);
@@ -81,61 +97,28 @@ export class AreaMastersPage extends BasePage {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
     await this.confirmDialog("Cancel");
-    for (const name of names) {
-      await this.expectInList(name);
-    }
+    for (const name of names) await this.expectInList(name);
   }
 
-  // ---------- Assertions ----------
+  // ---------- Assertions (menu-specific wrappers over BasePage) ----------
 
-  async expectDetailOpened(name: string) {
-    await expect(
-      this.page.getByRole("heading", { name: name.trim(), exact: true }),
-    ).toBeVisible();
-  }
-
-  /** ASSUMPTION: the area page (view mode) renders the same test-id inputs. */
+  /** Field undefined = not checked, "" = empty (UI "-"). Name is checked on the H6 title. */
   async expectDetail(expected: Partial<AreaMaster>) {
-    const map = this.fieldMap(expected);
-    for (const [input, value] of map) {
-      if (value !== undefined) await expect(input()).toHaveValue(value);
-    }
-  }
-
-  async expectListColumns(columns: string[]) {
-    for (const column of columns) {
-      await expect(
-        this.page.getByRole("columnheader", { name: column, exact: true }),
-      ).toBeVisible();
-    }
+    await this.expectDetailFields(expected, DETAIL_FIELDS);
   }
 
   async expectInList(name: string, factory?: string) {
-    await expect(this.rowOf(name, factory)).toHaveCount(1);
+    await this.expectRowInList(...this.rowCells(name, factory));
   }
 
   async expectNotInList(name: string, factory?: string) {
-    await expect(this.rowOf(name, factory)).toHaveCount(0);
-  }
-
-  async expectNoDuplicateModal() {
-    await expect(
-      this.page.getByRole("dialog", { name: "Duplicate Record" }),
-    ).toHaveCount(0);
+    await this.expectRowNotInList(...this.rowCells(name, factory));
   }
 
   // ---------- Helpers ----------
 
-  private rowOf(name: string, factory?: string) {
-    let row = this.page.getByRole("row").filter({
-      has: this.page.getByRole("cell", { name: name.trim(), exact: true }),
-    });
-    if (factory) {
-      row = row.filter({
-        has: this.page.getByRole("cell", { name: factory, exact: true }),
-      });
-    }
-    return row;
+  private rowCells(name: string, factory?: string) {
+    return factory ? [name, factory] : [name];
   }
 
   private fieldMap(data: Partial<AreaMaster>) {

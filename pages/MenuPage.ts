@@ -52,7 +52,7 @@ export class MenuPage extends BasePage {
   }
 
   /** Breadcrumb halaman detail: yang terakhir adalah nama data (bukan link). */
-  async expectDetailOpened(m: MenuItem) {
+  async expectDetailOpenedMenu(m: MenuItem) {
     await expect(this.breadcrumb()).toBeVisible();
     await expect(
       this.breadcrumb().getByRole("link", { name: m.name, exact: true }),

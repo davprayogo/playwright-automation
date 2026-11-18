@@ -14,9 +14,7 @@ export async function clickRandomRow(rows: Locator, testInfo?: TestInfo) {
   const total = await rows.count();
   const index = Math.floor(Math.random() * total);
 
-  console.log(
-    `Ditemukan ${total} baris data. Memilih baris ke-${index + 1} secara acak.`,
-  );
+  // console.log(`Ditemukan ${total} baris data. Memilih baris ke-${index + 1} secara acak.`,);
   // Tampil di laporan HTML/Allure, supaya kegagalan di baris tertentu bisa direproduksi
   testInfo?.annotations.push({
     type: "random-row",
@@ -100,7 +98,7 @@ export async function selectCheckboxesByColumnValues(
   const columnIndex = await getColumnIndex(page, columnName); // header sama di semua halaman
 
   for (let p = 1; p <= maxPages && remaining.size > 0; p++) {
-    console.log(`Checking page ke-${p}`);
+    // console.log(`Checking page ke-${p}`);
 
     // Tunggu data asli (baris yang punya checkbox), bukan skeleton
     await page
@@ -176,7 +174,7 @@ export async function clickRowByColumnValue(
     .first();
 
   for (let p = 1; p <= maxPages; p++) {
-    console.log(`Checking page ke-${p}`);
+    // console.log(`Checking page ke-${p}`);
 
     // Tunggu data asli muncul (bukan skeleton) sebelum mencari
     await clickableRows
@@ -186,7 +184,7 @@ export async function clickRowByColumnValue(
 
     if ((await row.count()) > 0) {
       await row.first().click();
-      console.log(`Data ditemukan di page ke-${p}, baris diklik.`);
+      // console.log(`Data ditemukan di page ke-${p}, baris diklik.`);
       return;
     }
 
