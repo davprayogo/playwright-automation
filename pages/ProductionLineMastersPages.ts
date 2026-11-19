@@ -84,24 +84,54 @@ type ReferenceField =
   | "storageLocation"
   | "repairStorageLocation";
 
+/** Text and reference fields of the form (toggles excluded). */
+export type PlmTextOrRefField = TextField;
+
+/** MOM-99 business-rule messages (FSD Section 7.3 / 8.3). Generic checks use STD_MESSAGES. */
+export const PLM_MESSAGES = {
+  repairSameAsStorage: (storageLocation: string) =>
+    `Repair Storage Location must be different from Storage Location ${storageLocation}. Please select another storage location.`,
+  autoTransferNeedsRepair:
+    "Auto Transfer to Repair needs a Repair Storage Location. Please select a repair storage location or set Auto Transfer to Repair to No.",
+  saveFailed:
+    "The change could not be saved. Please try again or contact IT support.",
+  listLoadFailed:
+    "Production lines could not be loaded. Please refresh the page or contact IT support.",
+  detailLoadFailed:
+    "This production line could not be loaded. Please refresh the page or contact IT support.",
+  linesNoLongerExist: (codes: string[]) =>
+    `These production lines no longer exist: ${codes.join(", ")}. Please refresh the page.`,
+} as const;
+
 export class ProductionLineMastersPage extends BasePage {
   readonly path = "/master-data/plant-structures/production-lines";
 
   // Test ids as seen in the UI (toggle Production Line): prefix "pl" and the field
   // name of the data model, kebab-case: "pl-is-production-line-input" (not "plm-production-line-input").
   // Only pl-is-production-line is confirmed; the other ids follow the same pattern.
+  // The field wrapper has the id without "-input"; inline errors show inside it.
   // Area, Factory, Floor, Division and Active are read only: no input locator.
-  private inputCode = () => this.page.getByTestId("pl-code-input");
-  private inputName = () => this.page.getByTestId("pl-name-input");
-  private inputLineNo = () => this.page.getByTestId("pl-line-no-input");
-  private inputProcessMaster = () =>
-    this.page.getByTestId("pl-master-process-input");
-  private inputStorageLocation = () =>
-    this.page.getByTestId("pl-storage-location-input");
+  private static readonly FIELD_IDS: Record<PlmTextOrRefField, string> = {
+    code: "pl-code",
+    name: "pl-name",
+    lineNo: "pl-line-no",
+    processMaster: "pl-master-process",
+    storageLocation: "pl-storage-location",
+    repairStorageLocation: "pl-repair-storage-location",
+    externalCode: "pl-external-code",
+  };
+  private input = (field: PlmTextOrRefField) =>
+    this.page.getByTestId(
+      `${ProductionLineMastersPage.FIELD_IDS[field]}-input`,
+    );
+  private inputCode = () => this.input("code");
+  private inputName = () => this.input("name");
+  private inputLineNo = () => this.input("lineNo");
+  private inputProcessMaster = () => this.input("processMaster");
+  private inputStorageLocation = () => this.input("storageLocation");
   private inputRepairStorageLocation = () =>
-    this.page.getByTestId("pl-repair-storage-location-input");
-  private inputExternalCode = () =>
-    this.page.getByTestId("pl-external-code-input");
+    this.input("repairStorageLocation");
+  private inputExternalCode = () => this.input("externalCode");
 
   /** Toggle field ids (see BasePage.setToggle). */
   private static readonly TOGGLE_IDS: Record<keyof PlmToggles, string> = {
@@ -135,7 +165,7 @@ export class ProductionLineMastersPage extends BasePage {
    * typeText: type the text fields key by key, so the input's max length applies.
    */
   async startCreate(
-    data: ProductionLineMaster,
+    data: Partial<ProductionLineMaster>,
     opts: { typeText?: boolean } = {},
   ) {
     await this.openCreatePage();
@@ -166,6 +196,25 @@ export class ProductionLineMastersPage extends BasePage {
     await this.expectDetailOpened(code);
   }
 
+  /**
+   * Open the line, click Edit and fill the form, without saving.
+   * The list must already be open (call open() first).
+   */
+  async startEdit(
+    code: string,
+    data: Partial<Omit<ProductionLineMaster, "code">>,
+  ) {
+    await this.openDetailByColumn("Code", code);
+    await this.expectDetailOpened(code);
+    await this.clickEdit();
+    await this.fillForm(data);
+  }
+
+  /** Click Save on a form that is expected to be refused (confirms only if asked). */
+  async trySave() {
+    await this.clickSaveConfirmIfAsked();
+  }
+
   /** Delete from the list (FR-160). Rows must be selected first. */
   async delete(codes: string[], opts: { confirmMessage?: string } = {}) {
     await this.selectRowsByColumn("Code", codes);
@@ -179,7 +228,7 @@ export class ProductionLineMastersPage extends BasePage {
   async deleteFromDetail(code: string) {
     await this.openDetail(code);
     await this.clickDetailDelete();
-    await this.expectDialogText(`Delete 1 Records?`);
+    await this.expectDialogText(`Delete production line ${code.trim()}?`);
     await this.confirmDialog("Delete");
     await this.open();
     await this.expectNotInList(code);
@@ -224,6 +273,16 @@ export class ProductionLineMastersPage extends BasePage {
   ) {
     for (const [column, value] of Object.entries(values)) {
       if (value !== undefined) await this.expectListCell(code, column, value);
+    }
+  }
+
+  /** The same inline error shows under each field. */
+  async expectFieldErrors(fields: PlmTextOrRefField[], message: string) {
+    for (const field of fields) {
+      await this.expectFieldError(
+        ProductionLineMastersPage.FIELD_IDS[field],
+        message,
+      );
     }
   }
 

@@ -15,6 +15,40 @@ export const TABLE_NO_RESULT_TEXT =
   "No data found. Please try again with different search criteria.";
 
 /**
+ * MOM-0029 standard messages, used for generic checks instead of the feature
+ * FSD wording (decision for MOM-99 Section 9; record the FSD mismatch).
+ */
+export const STD_MESSAGES = {
+  /** FR-460, inline under the field. */
+  required: "This field is required",
+  /** FR-470, inline under the reference field. */
+  inactiveRecord: "The selected record is inactive. Select another one",
+  recordNotExist: "The selected record no longer exists. Select another one",
+} as const;
+
+/** MOM-0029 standard modals: title + fixed part of the text. */
+export const STD_DIALOGS = {
+  /** FR-480. The full text also names the unique fields and values. */
+  duplicate: {
+    title: "Duplicate Record",
+    text: ["Another record already has the same", "It may be inactive. Please use different values."],
+  },
+  /** FR-490. The full text also names the user and the date time. */
+  outdated: {
+    title: "Data Outdated",
+    text: [
+      "after you opened it. Your changes have not been saved.",
+      "Reload to continue editing with the latest data, or Discard to cancel your changes.",
+    ],
+  },
+  /** FR-500. */
+  deleted: {
+    title: "Record Deleted",
+    text: ["This record was deleted by another user after you opened it. Your changes have not been saved."],
+  },
+} as const;
+
+/**
  * Maps a menu's data fields to its detail view.
  * - titleField: field shown as the H6 title (it has no label/value row).
  * - labels: field -> label text from FSD Section 7.5.2 (title field excluded).
@@ -196,6 +230,11 @@ export abstract class BasePage {
     await this.page.getByTestId("btn-detail-save").click();
   }
 
+  /** A refused save leaves the form open: Save is still shown. */
+  async expectFormStillOpen() {
+    await expect(this.page.getByTestId("btn-detail-save")).toBeVisible();
+  }
+
   /** Delete on the LIST (rows must be selected first): More → Delete. */
   async clickDelete() {
     await this.page.getByTestId("record-action-btn-more").click();
@@ -236,6 +275,31 @@ export abstract class BasePage {
   /** Check the confirmation text before clicking a dialog button. */
   async expectDialogText(text: string) {
     await expect(this.dialog()).toContainText(text);
+  }
+
+  /** Dialog with this title is shown and contains every text part. */
+  async expectDialogWithTitle(title: string, texts: readonly string[] = []) {
+    const dialog = this.page.getByRole("dialog", { name: title });
+    await expect(dialog).toBeVisible();
+    for (const text of texts) await expect(dialog).toContainText(text);
+  }
+
+  /**
+   * For a save that is expected to be refused: click Save, and click Save in the
+   * confirmation only if one appears. Client-side checks refuse before the
+   * confirmation; server checks refuse after it. Another dialog (e.g. Duplicate
+   * Record) is left open for the test to check.
+   */
+  async clickSaveConfirmIfAsked() {
+    await this.clickSave();
+    const dialog = this.dialog();
+    const shown = await dialog
+      .first()
+      .waitFor({ state: "visible", timeout: 3000 })
+      .then(() => true, () => false);
+    if (!shown) return;
+    const save = dialog.getByRole("button", { name: "Save", exact: true });
+    if ((await save.count()) > 0) await save.click();
   }
 
   /** No dialog with this title is shown (e.g. "Duplicate Record"). */
@@ -291,9 +355,7 @@ export abstract class BasePage {
       const value = expected[key];
       if (value === undefined) continue;
       if (typeof value !== "string") {
-        throw new Error(
-          `Detail field "${String(key)}" is not text; check it separately.`,
-        );
+        throw new Error(`Detail field "${String(key)}" is not text; check it separately.`);
       }
       if (key === map.titleField) {
         await this.expectDetailOpened(value);
@@ -301,12 +363,35 @@ export abstract class BasePage {
       }
       const label = map.labels[key];
       if (!label) {
-        throw new Error(
-          `No detail label for field "${String(key)}". Add it to DETAIL_LABELS.`,
-        );
+        throw new Error(`No detail label for field "${String(key)}". Add it to DETAIL_LABELS.`);
       }
       await this.expectDetailValue(label, value);
     }
+  }
+
+  // =====================================================================
+  // Messages (negative cases)
+  // =====================================================================
+
+  /**
+   * Inline error of one field. The field wrapper has the field id without
+   * "-input" (seen on the Lumina toggle: <div id="pl-is-production-line">
+   * holds the input and a text slot under it).
+   */
+  protected fieldError(fieldId: string, message: string): Locator {
+    return this.page.getByTestId(fieldId).getByText(message, { exact: true });
+  }
+
+  async expectFieldError(fieldId: string, message: string) {
+    await expect(this.fieldError(fieldId, message)).toBeVisible();
+  }
+
+  /**
+   * A message is shown somewhere on the page (inline, toast or modal), exact text.
+   * Use it when the FSD does not say where the message shows.
+   */
+  async expectMessage(message: string) {
+    await expect(this.page.getByText(message, { exact: true }).first()).toBeVisible();
   }
 
   // =====================================================================

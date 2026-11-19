@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
-import { AreaMastersPage } from "../pages/AreaMastersPage";
-import { ProcessMastersPage } from "../pages/ProcessMastersPage";
-import { StorageLocationsPage } from "../pages/StorageLocationsPage";
+import { AreaMastersPage } from "@pages/AreaMastersPage";
+import { ProcessMastersPage } from "@pages/ProcessMastersPage";
+import { StorageLocationsPage } from "@pages/StorageLocationsPage";
 import type { AreaMaster } from "@data/wms/areaMaster";
 
 /** A storage location made for the test, with the area data a line shows for it. */
@@ -101,6 +101,20 @@ export class ProductionLineRefs {
     };
     this.slocs.set(key, ref);
     return ref;
+  }
+
+  /**
+   * Delete one storage location from another page (a second user), e.g. while a
+   * line form that selected it is still open. It is then left out of cleanup().
+   */
+  async deleteStorageLocationFrom(page: Page, key: SlocKey) {
+    const ref = this.slocs.get(key);
+    if (!ref)
+      throw new Error(`Storage location "${key}" was not made in this test.`);
+    const other = new StorageLocationsPage(page);
+    await other.open();
+    await other.delete([ref.name]);
+    this.slocs.delete(key);
   }
 
   /** Delete storage locations, then areas, then the process master. Logs and continues on failure. */

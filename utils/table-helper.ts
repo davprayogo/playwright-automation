@@ -117,12 +117,12 @@ export async function selectCheckboxesByColumnValues(
       for (let i = 0; i < count; i++) {
         await checkRow(checkboxes.nth(i)); // semua baris yang cocok di halaman ini
       }
-      console.log(`Found & selected value: ${value}`);
+      // console.log(`Found & selected value: ${value}`);
       remaining.delete(value);
     }
 
     if (remaining.size === 0) {
-      console.log("Semua value sudah ditemukan");
+      // console.log("Semua value sudah ditemukan");
       break;
     }
     if (!(await goToNextPage(page))) break;
