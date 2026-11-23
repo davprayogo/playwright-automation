@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import {
   BasePage,
+  deleteConfirmMessage,
   duplicateRecordMessage,
   type DetailFieldMap,
 } from "./BasePage";
@@ -36,7 +37,8 @@ const DETAIL_FIELDS: DetailFieldMap<AreaMaster> = {
  * Generic checks use the BasePage standards instead (AUTOMATION_RULES Section 10):
  * required (inline), duplicate (toast, duplicateRecordMessage), delete of an area in use
  * (toast, STD_MESSAGES.deleteInUse — replaces the FR-80 "These areas cannot be deleted..." text),
- * concurrency (STD_DIALOGS).
+ * concurrency (STD_DIALOGS), delete confirmation (deleteConfirmMessage — replaces the FR-80
+ * "Delete {N} areas?" / "Delete area {Name}?" texts).
  */
 export const AM_MESSAGES = {
   listLoadFailed:
@@ -125,8 +127,7 @@ export class AreaMastersPage extends BasePage {
     data: Partial<AreaMaster>,
     opts: { byFactory?: string } = {},
   ) {
-    if (opts.byFactory)
-      await this.openDetailByColumn("Factory", opts.byFactory);
+    if (opts.byFactory) await this.openDetailByColumn("Factory", opts.byFactory);
     else await this.openDetailByColumn("Name", name);
     await this.expectDetailOpened(name);
     await this.clickEdit();
@@ -138,11 +139,14 @@ export class AreaMastersPage extends BasePage {
     await this.clickSaveConfirmIfAsked();
   }
 
-  /** Delete from the list. Rows must be selected first. */
-  async delete(names: string[], opts: { confirmMessage?: string } = {}) {
+  /**
+   * Delete from the list. Rows must be selected first.
+   * Checks the standard confirmation "Delete 1 Record?" / "Delete {qty} Records?".
+   */
+  async delete(names: string[]) {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
-    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.expectDialogText(deleteConfirmMessage(names.length));
     await this.confirmDialog("Delete");
     for (const name of names) await this.expectNotInList(name);
   }
@@ -154,23 +158,25 @@ export class AreaMastersPage extends BasePage {
   async tryDelete(names: string[]) {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
+    await this.expectDialogText(deleteConfirmMessage(names.length));
     await this.confirmDialog("Delete");
   }
 
-  /** Delete from the area page (FR-80): More → Delete → confirm. */
+  /** Delete from the area page (FR-80): More → Delete → confirm "Delete 1 Record?". */
   async deleteFromDetail(name: string) {
     await this.openDetail(name);
     await this.clickDetailDelete();
-    await this.expectDialogText(`Delete 1 Record?`);
+    await this.expectDialogText(deleteConfirmMessage(1));
     await this.confirmDialog("Delete");
     await this.open();
     await this.expectNotInList(name);
   }
 
-  /** Select rows, click Delete, then cancel the confirmation. */
+  /** Select rows, click Delete, check the confirmation, then cancel it. */
   async cancelDelete(names: string[]) {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
+    await this.expectDialogText(deleteConfirmMessage(names.length));
     await this.confirmDialog("Cancel");
     for (const name of names) await this.expectInList(name);
   }

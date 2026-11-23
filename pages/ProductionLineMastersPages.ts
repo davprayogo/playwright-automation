@@ -1,5 +1,9 @@
 import { expect, type Locator } from "@playwright/test";
-import { BasePage, type DetailFieldMap } from "./BasePage";
+import {
+  BasePage,
+  deleteConfirmMessage,
+  type DetailFieldMap,
+} from "./BasePage";
 import type {
   ProductionLineDerived,
   ProductionLineMaster,
@@ -164,7 +168,7 @@ export class ProductionLineMastersPage extends BasePage {
   private static readonly TOGGLE_IDS: Record<keyof PlmToggles, string> = {
     productionLine: "pl-is-production-line",
     twoStepTransfer: "pl-is-two-step-transfer",
-    autoTransferToRepair: "pl-is-auto-transfer-to-repair",
+    autoTransferToRepair: "pl-is-auto-repair-transfer",
   };
 
   // ---------- Navigation ----------
@@ -242,30 +246,33 @@ export class ProductionLineMastersPage extends BasePage {
     await this.clickSaveConfirmIfAsked();
   }
 
-  /** Delete from the list (FR-160). Rows must be selected first. */
-  async delete(codes: string[], opts: { confirmMessage?: string } = {}) {
+  /**
+   * Delete from the list (FR-160). Rows must be selected first.
+   * Checks the standard confirmation "Delete 1 Record?" / "Delete {qty} Records?".
+   */
+  async delete(codes: string[]) {
     await this.selectRowsByColumn("Code", codes);
     await this.clickDelete();
-    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.expectDialogText(deleteConfirmMessage(codes.length));
     await this.confirmDialog("Delete");
     for (const code of codes) await this.expectNotInList(code);
   }
 
-  /** Delete from the line page (FR-160): More → Delete → confirm. */
+  /** Delete from the line page (FR-160): More → Delete → confirm "Delete 1 Record?". */
   async deleteFromDetail(code: string) {
     await this.openDetail(code);
     await this.clickDetailDelete();
-    await this.expectDialogText(`Delete production line ${code.trim()}?`);
+    await this.expectDialogText(deleteConfirmMessage(1));
     await this.confirmDialog("Delete");
     await this.open();
     await this.expectNotInList(code);
   }
 
   /** Select rows, click Delete, then cancel the confirmation. */
-  async cancelDelete(codes: string[], opts: { confirmMessage?: string } = {}) {
+  async cancelDelete(codes: string[]) {
     await this.selectRowsByColumn("Code", codes);
     await this.clickDelete();
-    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.expectDialogText(deleteConfirmMessage(codes.length));
     await this.confirmDialog("Cancel");
     for (const code of codes) await this.expectInList(code);
   }

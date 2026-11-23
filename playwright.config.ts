@@ -32,7 +32,7 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
     testIdAttribute: "id",
-    launchOptions: { executablePath: "/usr/bin/chromium" },
+    // launchOptions: { executablePath: "/usr/bin/chromium" },
     ignoreHTTPSErrors: true,
   },
 

@@ -29,7 +29,7 @@ export const CF_INACTIVE_ONLY = { field: "Active", operator: "=", value: "FALSE"
 
 /** The Active column shows a badge with text instead of an icon. */
 export const LIST_ACTIVE_COLUMN = "Active";
-export const LIST_ACTIVE_BADGE = { true: "Active", false: "Inactive" } as const;
+export const LIST_ACTIVE_BADGE = { true: "Active", false: "Non Active" } as const;
 
 /**
  * MOM-0029 standard messages, used for generic checks instead of the feature
@@ -45,6 +45,16 @@ export const STD_MESSAGES = {
   deleteInUse:
     "This record cannot be deleted because it is already used by other records. If it is no longer needed, set it to inactive instead.",
 } as const;
+
+/**
+ * Delete confirmation text (standard Lumina, list and detail view):
+ *   1 record   : "Delete 1 Record?"
+ *   2+ records : "Delete {qty} Records?"
+ * Replaces the per-menu FSD texts ("Delete {N} production lines?", "Delete area {Name}?").
+ */
+export function deleteConfirmMessage(count: number): string {
+  return count === 1 ? "Delete 1 Record?" : `Delete ${count} Records?`;
+}
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

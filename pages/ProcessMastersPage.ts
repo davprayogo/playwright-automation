@@ -1,4 +1,8 @@
-import { BasePage, type DetailFieldMap } from "./BasePage";
+import {
+  BasePage,
+  deleteConfirmMessage,
+  type DetailFieldMap,
+} from "./BasePage";
 import type { ProcessMaster } from "@data/masterdata/ProcessMasters";
 
 /**
@@ -54,10 +58,10 @@ export class ProcessMastersPage extends BasePage {
   }
 
   /** Delete from the list (FR-100). Rows must be selected first. */
-  async delete(names: string[], opts: { confirmMessage?: string } = {}) {
+  async delete(names: string[]) {
     await this.selectRowsByColumn("Name", names);
     await this.clickDelete();
-    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.expectDialogText(deleteConfirmMessage(names.length)); // "Delete 1 Record?" / "Delete {qty} Records?"
     await this.confirmDialog("Delete");
     for (const name of names) await this.expectNotInList(name);
   }
