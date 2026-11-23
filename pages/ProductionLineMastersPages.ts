@@ -25,6 +25,18 @@ export const PLM_LIST_COLUMNS = [
 
 export type PlmListColumn = (typeof PLM_LIST_COLUMNS)[number];
 
+/** Yes/No list columns: an icon (Two Step Transfer, Auto Transfer to Repair) or the Active badge. */
+type PlmBooleanColumn =
+  | "Two Step Transfer"
+  | "Auto Transfer to Repair"
+  | "Active";
+
+/** Expected list cells: text columns take a string, Yes/No columns take a boolean. */
+export type PlmListValues = Partial<
+  Record<Exclude<PlmListColumn, PlmBooleanColumn>, string> &
+    Record<PlmBooleanColumn, boolean>
+>;
+
 /** Toggle fields. Checked on the form (not text on the detail view). */
 export type PlmToggles = Pick<
   ProductionLineMaster,
@@ -69,6 +81,7 @@ const DETAIL_LABELS: Record<
   repairStorageLocation: "Repair Storage Location",
   externalCode: "External Code",
   area: "Area",
+  master_area: "Master Area",
   factory: "Factory",
   floor: "Floor",
   division: "Division",
@@ -104,6 +117,10 @@ export const PLM_MESSAGES = {
 } as const;
 
 export class ProductionLineMastersPage extends BasePage {
+  /**
+   * Route seen in the UI (hyperlink href ".../plant-structures/production-lines/70/process-masters/46").
+   * It differs from the FSD menu name "Production Line Masters" (AUTOMATION_RULES Section 2): FSD finding.
+   */
   readonly path = "/master-data/plant-structures/production-lines";
 
   // Test ids as seen in the UI (toggle Production Line): prefix "pl" and the field
@@ -132,6 +149,16 @@ export class ProductionLineMastersPage extends BasePage {
   private inputRepairStorageLocation = () =>
     this.input("repairStorageLocation");
   private inputExternalCode = () => this.input("externalCode");
+
+  /**
+   * <td data-col-key> of the Yes/No list columns. Confirmed in the UI: isTwoStepTransfer
+   * (and isProductionLine). isAutoRepairTransfer and isActive follow the same pattern.
+   */
+  protected override readonly listColumnKeys = {
+    "Two Step Transfer": "isTwoStepTransfer",
+    "Auto Transfer to Repair": "isAutoRepairTransfer",
+    Active: "isActive",
+  };
 
   /** Toggle field ids (see BasePage.setToggle). */
   private static readonly TOGGLE_IDS: Record<keyof PlmToggles, string> = {
@@ -266,14 +293,12 @@ export class ProductionLineMastersPage extends BasePage {
     await this.expectRowNotInList(code);
   }
 
-  /** The row of `code` shows each value in its column (FSD 7.5 List View names). */
-  async expectListValues(
-    code: string,
-    values: Partial<Record<PlmListColumn, string>>,
-  ) {
-    for (const [column, value] of Object.entries(values)) {
-      if (value !== undefined) await this.expectListCell(code, column, value);
-    }
+  /**
+   * The row of `code` shows each value in its column (FSD 7.5 List View names).
+   * Yes/No columns take a boolean: icon, or the badge for Active.
+   */
+  async expectLine(code: string, values: PlmListValues) {
+    await this.expectListValues(code, values);
   }
 
   /** The same inline error shows under each field. */

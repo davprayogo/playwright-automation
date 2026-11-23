@@ -5,23 +5,25 @@
  * and are tagged by the FSD Type: run a subset with --grep @positive / --grep @negative.
  *
  * Automated:
- *  - @positive: 001, 004, 007, 008, 009, 011, 012, 015, 017, 023, 024, 027, 030, 036, 037, 038
- *  - @negative: 005, 006, 010, 014, 016, 019, 025, 026, 028, 029, 031, 033, 034, 041, 042
- *  Partial (see the annotation in each test): 001, 004, 014, 017, 024, 027, 029, 031, 036, 038, 042.
+ *  - @positive: 001, 002, 004, 007, 008, 009, 011, 012, 015, 017, 020, 022, 023, 024, 027, 030, 036, 037, 038
+ *  - @negative: 005, 006, 010, 014, 016, 018, 019, 021, 025, 026, 028, 029, 031, 033, 034, 041, 042
+ *  Partial (see the annotation in each test): 004, 024, 027, 029, 031, 036, 038, 042.
  *  034 is an Additional QA Recommendation (MOM-0029 FR-490), not an MOM-99 requirement.
  *
  * Not automated:
- *  - 002 (Custom Filter: no BasePage function yet)
- *  - 003, 022, 035 (changes in other menus after the line is saved, or Workstation Masters)
+ *  - 003, 035 (changes in Area Masters / Storage Locations after the line is saved, Workstation Masters)
  *  - 013, 032 (API requests: no API client yet)
- *  - 018, 020, 021 (a reference becomes inactive: the active/inactive process is not automated)
  *  - 039, 040 (lines used by work order schedules, workstations or material allocation lines)
  *  - 043 (export download: no BasePage function yet)
  *  - 044–050 (authorization: needs a second login without the action)
  *
  * Test data: every test makes its own reference data through the UI, on first use
  * (ProductionLineRefs: Area -> Storage Location, and Process Master), then its lines.
- * afterEach deletes the lines first, then the reference data.
+ * Inactive records: made with BasePage.deactivate() (general active/inactive process).
+ * afterEach deletes the lines first, then the reference data; inactive records are deleted
+ * from the list filtered with showInactiveOnly(), because the default list hides them.
+ * Toasts (confirmed in the UI): duplicate code and delete of a record in use show a toast,
+ * not the MOM-0029 modal / the MOM-99 FR-160 text. See expectToast() and duplicateRecordMessage().
  * Messages: generic checks expect MOM-0029 (STD_MESSAGES / STD_DIALOGS); MOM-99 business
  * rules expect the FSD text (PLM_MESSAGES). Where the FSD does not say where a message
  * shows, the test only checks that the exact text is on the page.
@@ -36,13 +38,17 @@ import {
   PLM_MESSAGES,
   ProductionLineMastersPage,
 } from "@pages/ProductionLineMastersPages";
-import { STD_DIALOGS, STD_MESSAGES } from "@pages/BasePage";
+import {
+  STD_DIALOGS,
+  STD_MESSAGES,
+  duplicateRecordMessage,
+} from "@pages/BasePage";
 import type { ProductionLineMaster } from "@data/masterdata/ProductionLineMasters";
 import { attachScreenshot } from "@utils/screenshot";
 import { failApi } from "@utils/network";
 import {
-  INACTIVE_REFS,
   ProductionLineRefs,
+  type PmKey,
   type SlocKey,
 } from "@fixtures/ProductionLineRefs";
 
@@ -65,16 +71,18 @@ type LineOpts = Partial<
     ProductionLineMaster,
     "processMaster" | "storageLocation" | "repairStorageLocation"
   >
-> & { sloc?: SlocKey; repair?: SlocKey };
+> & { pm?: PmKey; sloc?: SlocKey; repair?: SlocKey };
 
 test.describe("MOM-99 Production Line Masters", () => {
   let plPage: ProductionLineMastersPage;
   let refs: ProductionLineRefs;
   let created: string[];
+  let inactiveLines: string[];
   let extraPages: Page[];
 
   /** A valid line. Line No `L` + 6 chars stays under the 10-char limit. Storage location default: line2. */
   const newLine = async ({
+    pm = "main",
     sloc = "line2",
     repair,
     ...overrides
@@ -84,7 +92,7 @@ test.describe("MOM-99 Production Line Masters", () => {
       code: `PL-${id}`,
       name: `SMT ${id}`,
       lineNo: `L${id}`,
-      processMaster: await refs.processMaster(),
+      processMaster: await refs.processMaster(pm),
       storageLocation: (await refs.storageLocation(sloc)).name,
       ...(repair
         ? { repairStorageLocation: (await refs.storageLocation(repair)).name }
@@ -100,6 +108,28 @@ test.describe("MOM-99 Production Line Masters", () => {
   };
   const untrack = (...codes: string[]) => {
     created = created.filter((c) => !codes.includes(c));
+    inactiveLines = inactiveLines.filter((c) => !codes.includes(c));
+  };
+  /** Set a line to Active No and track it for cleanup from the inactive-only list. */
+  const deactivateLine = async (code: string) => {
+    await plPage.open();
+    await plPage.deactivate("Code", [code]);
+    created = created.filter((c) => c !== code);
+    inactiveLines.push(code);
+  };
+  /** Delete lines: active ones from the default list, inactive ones from showInactiveOnly(). */
+  const deleteLines = async (codes: string[], inactive: boolean) => {
+    if (!codes.length) return;
+    try {
+      await plPage.open();
+      if (inactive) await plPage.showInactiveOnly();
+      await plPage.delete([...new Set(codes)]);
+    } catch (e) {
+      console.warn(
+        `Cleanup failed for ${inactive ? "inactive " : ""}lines: ${codes.join(", ")}`,
+        e,
+      );
+    }
   };
   const partial = (description: string) =>
     test.info().annotations.push({ type: "partial", description });
@@ -115,6 +145,7 @@ test.describe("MOM-99 Production Line Masters", () => {
     plPage = new ProductionLineMastersPage(page);
     refs = new ProductionLineRefs(page);
     created = [];
+    inactiveLines = [];
     extraPages = [];
     // Leaving a refused form may raise a browser "leave page?" prompt: accept it.
     page.on("dialog", (dialog) => dialog.accept());
@@ -124,14 +155,8 @@ test.describe("MOM-99 Production Line Masters", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     for (const other of extraPages) await other.close();
     // Lines first: a storage location or process master in use cannot be deleted.
-    if (created.length) {
-      try {
-        await plPage.open();
-        await plPage.delete([...new Set(created)]);
-      } catch (e) {
-        console.warn(`Cleanup failed for lines: ${created.join(", ")}`, e);
-      }
-    }
+    await deleteLines(created, false);
+    await deleteLines(inactiveLines, true);
     await refs.cleanup();
   });
 
@@ -141,21 +166,21 @@ test.describe("MOM-99 Production Line Masters", () => {
     "TC-MOM99-001 The list shows active lines with storage location and area data",
     POSITIVE,
     async ({ page }, testInfo) => {
-      partial(
-        "Inactive line hidden by default is not checked: needs the active/inactive process.",
-      );
       const data = await newLine({
         sloc: "line1",
         repair: "repair1",
         externalCode: "EXT-01",
       });
       await createLine(data);
+      const inactive = await newLine();
+      await createLine(inactive);
+      await deactivateLine(inactive.code);
       const sloc = await refs.storageLocation("line1");
 
       await plPage.open();
       await plPage.expectListColumns([...PLM_LIST_COLUMNS]);
       // Area data comes from Storage Location, not from Repair Storage Location.
-      await plPage.expectListValues(data.code, {
+      await plPage.expectLine(data.code, {
         Name: data.name,
         "Line No": data.lineNo,
         "Storage Location": sloc.name,
@@ -166,12 +191,44 @@ test.describe("MOM-99 Production Line Masters", () => {
         "Repair Storage Location": data.repairStorageLocation,
         "Process Master": data.processMaster,
         "External Code": "EXT-01",
-        "Two Step Transfer": "No",
-        "Auto Transfer to Repair": "No",
-        Active: "Yes",
+        "Two Step Transfer": false,
+        "Auto Transfer to Repair": false,
+        Active: true,
       });
+      await plPage.expectNotInList(inactive.code); // hidden by the default filter (Active = Yes)
 
       await attachScreenshot(page, testInfo, shot("TC-MOM99-001 List view"));
+    },
+  );
+
+  test(
+    "TC-MOM99-002 Inactive lines show when the Custom Filter Active = No is applied",
+    POSITIVE,
+    async ({ page }, testInfo) => {
+      const active = await newLine();
+      const inactive = await newLine();
+      await createLine(active);
+      await createLine(inactive);
+      await deactivateLine(inactive.code);
+
+      await plPage.open();
+      await plPage.expectNotInList(inactive.code); // step 1: hidden by default
+      await plPage.expectInList(active.code);
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-002 Step 1 List view"),
+      );
+
+      await plPage.showInactiveOnly(); // step 2: Custom Filter Active = FALSE
+      await plPage.expectLine(inactive.code, { Active: false });
+      await plPage.expectNotInList(active.code);
+
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-002 Step 2 List view"),
+      );
     },
   );
 
@@ -267,11 +324,11 @@ test.describe("MOM-99 Production Line Masters", () => {
       );
 
       await plPage.open();
-      await plPage.expectListValues(data.code, {
+      await plPage.expectLine(data.code, {
         Name: data.name,
         Area: sloc.area,
         Factory: sloc.factory,
-        Active: "Yes",
+        Active: true,
       });
 
       await attachScreenshot(
@@ -295,7 +352,7 @@ test.describe("MOM-99 Production Line Masters", () => {
         autoTransferToRepair: false,
       });
       await plPage.saveNew(data.code);
-      created.push(data.code);
+      created.push(data.code); 
 
       await plPage.expectDetail({
         repairStorageLocation: "",
@@ -308,10 +365,10 @@ test.describe("MOM-99 Production Line Masters", () => {
       );
 
       await plPage.open();
-      await plPage.expectListValues(data.code, {
-        "Two Step Transfer": "No",
-        "Auto Transfer to Repair": "No",
-        Active: "Yes",
+      await plPage.expectLine(data.code, {
+        "Two Step Transfer": false,
+        "Auto Transfer to Repair": false,
+        Active: true,
       });
       // Production Line is not a list column (FSD 7.5): read it on the Edit form.
       await plPage.expectSavedToggles(data.code, { productionLine: true });
@@ -337,9 +394,9 @@ test.describe("MOM-99 Production Line Masters", () => {
       await createLine(data);
 
       await plPage.open();
-      await plPage.expectListValues(data.code, {
-        "Two Step Transfer": "Yes",
-        "Auto Transfer to Repair": "Yes",
+      await plPage.expectLine(data.code, {
+        "Two Step Transfer": true,
+        "Auto Transfer to Repair": true,
         "Repair Storage Location": data.repairStorageLocation,
       });
       await plPage.expectSavedToggles(data.code, {
@@ -448,9 +505,6 @@ test.describe("MOM-99 Production Line Masters", () => {
     "TC-MOM99-014 Duplicate code is refused, ignoring case and across factories",
     NEGATIVE,
     async ({ page }, testInfo) => {
-      partial(
-        "Step 2 (duplicate of an inactive line) is not automated: needs the active/inactive process.",
-      );
       const existing = await newLine({ sloc: "line1" }); // factory of area A
       await createLine(existing);
       const duplicate = await newLine({
@@ -461,9 +515,9 @@ test.describe("MOM-99 Production Line Masters", () => {
       await plPage.open();
       await plPage.startCreate(duplicate);
       await plPage.trySave();
-      await plPage.expectDialogWithTitle(
-        STD_DIALOGS.duplicate.title,
-        STD_DIALOGS.duplicate.text,
+      // Toast (UI), not the MOM-0029 modal. Value shown not confirmed: typed or existing spelling.
+      await plPage.expectToast(
+        duplicateRecordMessage([["Code", [duplicate.code, existing.code]]]),
       );
       await attachScreenshot(
         page,
@@ -474,8 +528,27 @@ test.describe("MOM-99 Production Line Masters", () => {
       await plPage.open();
       await plPage.expectInList(existing.code);
       await plPage.expectNotInList(duplicate.code); // nothing is saved
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-014 Step 1 List view"),
+      );
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM99-014 List view"));
+      // Step 2: the code of an inactive line is also refused.
+      const inactive = await newLine();
+      await createLine(inactive);
+      await deactivateLine(inactive.code);
+      await plPage.open();
+      await plPage.startCreate(await newLine({ code: inactive.code }));
+      await plPage.trySave();
+      await plPage.expectToast(
+        duplicateRecordMessage([["Code", inactive.code]]),
+      );
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-014 Step 2 Detail view setelah Create ditolak"),
+      );
     },
   );
 
@@ -494,7 +567,7 @@ test.describe("MOM-99 Production Line Masters", () => {
 
       await plPage.open();
       for (const code of [first.code, second.code]) {
-        await plPage.expectListValues(code, {
+        await plPage.expectLine(code, {
           Name: first.name,
           "Line No": first.lineNo,
           "External Code": first.externalCode,
@@ -539,13 +612,10 @@ test.describe("MOM-99 Production Line Masters", () => {
       const pm = await refs.processMaster();
       const sloc = await refs.storageLocation("line1");
       const repair = await refs.storageLocation("repair1");
-      const inactivePm = INACTIVE_REFS.processMaster;
-      const inactiveSloc = INACTIVE_REFS.storageLocation;
-      if (!inactivePm || !inactiveSloc) {
-        partial(
-          "Inactive records hidden is not checked: set PLM_INACTIVE_PROCESS_MASTER and PLM_INACTIVE_SLOC to existing inactive records.",
-        );
-      }
+      const inactivePm = await refs.processMaster("spare");
+      const inactiveSloc = (await refs.storageLocation("spare1")).name;
+      await refs.deactivateProcessMaster("spare");
+      await refs.deactivateStorageLocation("spare1");
 
       await plPage.open();
       await plPage.openCreatePage();
@@ -565,6 +635,38 @@ test.describe("MOM-99 Production Line Masters", () => {
         page,
         testInfo,
         shot("TC-MOM99-017 Detail view (New)"),
+      );
+    },
+  );
+
+  test(
+    "TC-MOM99-018 A selected reference that becomes inactive before Save is refused on Create",
+    NEGATIVE,
+    async ({ page }, testInfo) => {
+      const data = await newLine({
+        pm: "spare",
+        sloc: "spare1",
+        repair: "spare2",
+      });
+      await plPage.open();
+      await plPage.startCreate(data);
+
+      const other = await anotherUser(page); // user B
+      await refs.deactivateProcessMaster("spare", other);
+      await refs.deactivateStorageLocation("spare1", other);
+      await refs.deactivateStorageLocation("spare2", other);
+
+      await plPage.trySave();
+      await plPage.expectFieldErrors(
+        ["processMaster", "storageLocation", "repairStorageLocation"],
+        STD_MESSAGES.inactiveRecord,
+      );
+      await plPage.expectFormStillOpen(); // nothing is saved
+
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-018 Detail view setelah Create ditolak"),
       );
     },
   );
@@ -595,6 +697,109 @@ test.describe("MOM-99 Production Line Masters", () => {
   );
 
   test(
+    "TC-MOM99-020 A line whose references became inactive can still be saved when they are not changed",
+    POSITIVE,
+    async ({ page }, testInfo) => {
+      const data = await newLine({
+        pm: "spare",
+        sloc: "spare1",
+        repair: "spare2",
+      });
+      await createLine(data);
+      await refs.deactivateProcessMaster("spare");
+      await refs.deactivateStorageLocation("spare1");
+      await refs.deactivateStorageLocation("spare2");
+
+      await plPage.openDetail(data.code); // step 1: names still shown
+      await plPage.expectDetail({
+        processMaster: data.processMaster,
+        storageLocation: data.storageLocation,
+        repairStorageLocation: data.repairStorageLocation,
+      });
+
+      await plPage.open();
+      await plPage.update(data.code, { externalCode: "EXT-05" });
+
+      await plPage.openDetail(data.code);
+      await plPage.expectDetail({
+        externalCode: "EXT-05",
+        processMaster: data.processMaster,
+        storageLocation: data.storageLocation,
+        repairStorageLocation: data.repairStorageLocation,
+      });
+
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-020 Detail view setelah Update"),
+      );
+    },
+  );
+
+  test(
+    "TC-MOM99-021 A changed reference that becomes inactive before Save is refused on Update",
+    NEGATIVE,
+    async ({ page }, testInfo) => {
+      const data = await newLine({ sloc: "line2", repair: "repair1" });
+      await createLine(data);
+      const newPm = await refs.processMaster("spare");
+      const newSloc = (await refs.storageLocation("spare1")).name;
+      const newRepair = (await refs.storageLocation("spare2")).name;
+
+      await plPage.open();
+      await plPage.startEdit(data.code, {
+        processMaster: newPm,
+        storageLocation: newSloc,
+        repairStorageLocation: newRepair,
+      });
+
+      const other = await anotherUser(page); // user B
+      await refs.deactivateProcessMaster("spare", other);
+      await refs.deactivateStorageLocation("spare1", other);
+      await refs.deactivateStorageLocation("spare2", other);
+
+      await plPage.trySave();
+      await plPage.expectFieldErrors(
+        ["processMaster", "storageLocation", "repairStorageLocation"],
+        STD_MESSAGES.inactiveRecord,
+      );
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-021 Detail view setelah Update ditolak"),
+      );
+
+      await plPage.openDetail(data.code); // nothing changes
+      await plPage.expectDetail({
+        processMaster: data.processMaster,
+        storageLocation: data.storageLocation,
+        repairStorageLocation: data.repairStorageLocation,
+      });
+
+      await attachScreenshot(page, testInfo, shot("TC-MOM99-021 Detail view"));
+    },
+  );
+
+  test(
+    "TC-MOM99-022 A storage location whose area is inactive can be used",
+    POSITIVE,
+    async ({ page }, testInfo) => {
+      const sloc = await refs.storageLocation("areaC");
+      await refs.deactivateAreaOf("areaC"); // the storage location stays active
+      const data = await newLine({ sloc: "areaC" });
+
+      await createLine(data); // asserts H6 title = Code: the save is not refused
+      await plPage.expectDetail({ storageLocation: sloc.name });
+
+      await attachScreenshot(
+        page,
+        testInfo,
+        shot("TC-MOM99-022 Detail view setelah Create"),
+      );
+    },
+  );
+
+  test(
     "TC-MOM99-023 One storage location serves many lines, as storage location and as repair storage location",
     POSITIVE,
     async ({ page }, testInfo) => {
@@ -605,7 +810,7 @@ test.describe("MOM-99 Production Line Masters", () => {
 
       await plPage.open();
       for (const code of [first.code, second.code]) {
-        await plPage.expectListValues(code, {
+        await plPage.expectLine(code, {
           "Storage Location": first.storageLocation,
           "Repair Storage Location": first.repairStorageLocation,
         });

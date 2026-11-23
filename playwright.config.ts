@@ -28,9 +28,9 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure", //{ mode: "on", fullPage: true }, untuk ss semua testing setelah selesai
     video: "off", //'retain-on-failure'
-    trace: "retain-on-failure",
+    trace: "on", //retain-on-failur untuk on faill aja kalau on untuk semuanya
     actionTimeout: 15_000,
-    navigationTimeout: 120_000,
+    navigationTimeout: 30_000,
     testIdAttribute: "id",
     launchOptions: { executablePath: "/usr/bin/chromium" },
     ignoreHTTPSErrors: true,

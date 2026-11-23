@@ -26,6 +26,7 @@ export interface ProductionLineMaster {
 /** Read-only fields shown on the line, read from the area of its storage location. */
 export interface ProductionLineDerived {
   area?: string;
+  master_area?: string;
   factory?: string;
   floor?: string;
   division?: string;

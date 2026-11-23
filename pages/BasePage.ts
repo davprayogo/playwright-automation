@@ -15,6 +15,23 @@ export const TABLE_NO_RESULT_TEXT =
   "No data found. Please try again with different search criteria.";
 
 /**
+ * List view Yes/No cells show an icon, not text: a check for true, a dash for false.
+ * Values = aria-label of the icon (<span role="img" aria-label="...">, like "clipboard").
+ * Confirm with FE: change only here.
+ */
+export const LIST_BOOLEAN_ICON = { true: "check", false: "minus" } as const;
+
+/**
+ * Custom Filter (MOM-0029 FR-60) condition that lists inactive records only
+ * (the default list shows Active = Yes). Option texts as shown in the UI.
+ */
+export const CF_INACTIVE_ONLY = { field: "Active", operator: "=", value: "FALSE" } as const;
+
+/** The Active column shows a badge with text instead of an icon. */
+export const LIST_ACTIVE_COLUMN = "Active";
+export const LIST_ACTIVE_BADGE = { true: "Active", false: "Inactive" } as const;
+
+/**
  * MOM-0029 standard messages, used for generic checks instead of the feature
  * FSD wording (decision for MOM-99 Section 9; record the FSD mismatch).
  */
@@ -24,15 +41,37 @@ export const STD_MESSAGES = {
   /** FR-470, inline under the reference field. */
   inactiveRecord: "The selected record is inactive. Select another one",
   recordNotExist: "The selected record no longer exists. Select another one",
+  /** Toast. Delete refused because other records use the record (confirmed in the UI). */
+  deleteInUse:
+    "This record cannot be deleted because it is already used by other records. If it is no longer needed, set it to inactive instead.",
 } as const;
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Toast. Duplicate unique value(s) (MOM-0029 FR-480 text; shown as a toast in the UI,
+ * not as the "Duplicate Record" modal). Fields in the configured unique order:
+ *   1 field : Another record already has the same {Field}: {Value}. It may be inactive. Please use different values.
+ *   2+      : Another record already has the same {Field 1}: {Value 1}, {Field 2}: {Value 2}. It may be inactive. ...
+ * A value may be given as several accepted spellings (e.g. the typed "pl-01" and the
+ * existing "PL-01") while it is not confirmed which one the message shows.
+ * Returns an exact (anchored) pattern.
+ */
+export function duplicateRecordMessage(
+  fields: ReadonlyArray<readonly [field: string, value: string | readonly string[]]>,
+): RegExp {
+  const pairs = fields.map(([field, value]) => {
+    const values = (typeof value === "string" ? [value] : value).map((v) => escapeRegExp(v.trim()));
+    return `${escapeRegExp(field)}: (?:${values.join("|")})`;
+  });
+  return new RegExp(
+    `^Another record already has the same ${pairs.join(", ")}\\. It may be inactive\\. Please use different values\\.$`,
+  );
+}
 
 /** MOM-0029 standard modals: title + fixed part of the text. */
 export const STD_DIALOGS = {
-  /** FR-480. The full text also names the unique fields and values. */
-  duplicate: {
-    title: "Duplicate Record",
-    text: ["Another record already has the same", "It may be inactive. Please use different values."],
-  },
+  // FR-480 "Duplicate Record" is NOT a modal in the UI: it is a toast. Use duplicateRecordMessage().
   /** FR-490. The full text also names the user and the date time. */
   outdated: {
     title: "Data Outdated",
@@ -181,15 +220,98 @@ export abstract class BasePage {
   }
 
   /**
-   * The one data row that has a cell `rowKey` (a unique value, e.g. Code)
-   * shows `value` in `column`. Exact text, case-sensitive, after trim.
-   * Use it when a value such as "Yes" could sit in several columns.
+   * List column -> `data-col-key` of its <td> (Lumina: the field name, e.g. "isTwoStepTransfer").
+   * A Page menu overrides this for the columns it checks by cell. A column listed here is found
+   * by its key; any other column by its header position.
    */
-  async expectListCell(rowKey: string, column: string, value: string) {
-    const index = await this.listColumnIndex(column);
+  protected readonly listColumnKeys: Readonly<Record<string, string>> = {};
+
+  /** Cell of `column` in the one data row that has a cell `rowKey` (a unique value, e.g. Code). */
+  protected async listCell(rowKey: string, column: string): Promise<Locator> {
     const row = this.rowByCells(rowKey);
     await expect(row).toHaveCount(1);
-    await expect(row.getByRole("cell").nth(index)).toHaveText(value.trim());
+    const key = this.listColumnKeys[column];
+    if (key) {
+      // <td data-col-key> has no id; the key is the most stable hook (AUTOMATION_RULES 8.4).
+      const cell = row.locator(`td[data-col-key="${key}"]`);
+      await expect(cell, `No cell with data-col-key="${key}" for column "${column}"`).toHaveCount(1);
+      return cell;
+    }
+    const index = await this.listColumnIndex(column);
+    return row.getByRole("cell").nth(index);
+  }
+
+  /**
+   * The row of `rowKey` shows `value` as text in `column`. Exact text, case-sensitive, after trim.
+   * Use it when a value could sit in several columns.
+   */
+  async expectListCell(rowKey: string, column: string, value: string) {
+    await expect(await this.listCell(rowKey, column)).toHaveText(value.trim());
+  }
+
+  /**
+   * aria-labels of the icons (role="img" with an aria-label) in `scope`, hidden ones
+   * included: the check is about the value the cell shows, not about how it paints.
+   * The <svg aria-hidden> inside each Lumina icon also has role img but no label: skipped.
+   */
+  protected async iconLabels(scope: Locator): Promise<string[]> {
+    return scope
+      .getByRole("img", { includeHidden: true })
+      .evaluateAll((els) =>
+        els
+          .filter((e) => e.hasAttribute("aria-label"))
+          .map((e) => e.getAttribute("aria-label") as string),
+      );
+  }
+
+  /**
+   * Yes/No column: the cell holds exactly one icon, a check for true or a dash for
+   * false (LIST_BOOLEAN_ICON). Checked by presence, not visibility: the icon is an
+   * external svg sprite (<use xlink:href>) that may not paint in headless runs or traces.
+   * On failure the error lists the icons found in the cell and the cell HTML:
+   *   Received ["check"] -> the saved value differs (app or data issue, not the script)
+   *   Received []        -> the cell has no icon (empty value, or a different DOM)
+   */
+  async expectListBoolean(rowKey: string, column: string, value: boolean) {
+    const cell = await this.listCell(rowKey, column);
+    const want = LIST_BOOLEAN_ICON[`${value}`];
+    try {
+      await expect
+        .poll(() => this.iconLabels(cell), {
+          message: `List "${column}" of row ${rowKey}: expected icon "${want}" (${value})`,
+        })
+        .toEqual([want]);
+    } catch (e) {
+      const html = await cell
+        .evaluate((el) =>
+          el.innerHTML
+            .replace(/<style[\s\S]*?<\/style>/g, "")
+            .replace(/\s+/g, " ")
+            .slice(0, 600),
+        )
+        .catch(() => "(cell not readable)");
+      if (e instanceof Error) e.message += `\nCell HTML (styles removed): ${html}`;
+      throw e;
+    }
+  }
+
+  /** Active column: badge text (LIST_ACTIVE_BADGE). The badge colour is not checked. */
+  async expectListActive(rowKey: string, active: boolean) {
+    const cell = await this.listCell(rowKey, LIST_ACTIVE_COLUMN);
+    await expect(cell).toHaveText(LIST_ACTIVE_BADGE[`${active}`]);
+  }
+
+  /**
+   * Several cells of one row. string = text; boolean = Active badge for the Active
+   * column, Yes/No icon for every other column. undefined = not checked.
+   */
+  async expectListValues(rowKey: string, values: Record<string, string | boolean | undefined>) {
+    for (const [column, value] of Object.entries(values)) {
+      if (value === undefined) continue;
+      if (typeof value === "string") await this.expectListCell(rowKey, column, value);
+      else if (column === LIST_ACTIVE_COLUMN) await this.expectListActive(rowKey, value);
+      else await this.expectListBoolean(rowKey, column, value);
+    }
   }
 
   /** Data row that has a cell with exactly each given value (trimmed, case-sensitive). */
@@ -255,6 +377,238 @@ export abstract class BasePage {
   async clickDetailDelete() {
     await this.openDetailMore();
     await this.page.getByTestId("record-action-btn-delete").click();
+  }
+
+  /**
+   * Deactivate on the LIST (rows must be selected first): More → Deactivate.
+   * Same More button as Delete on the list (record-action-btn-more).
+   */
+  async clickDeactivate() {
+    await this.page.getByTestId("record-action-btn-more").click();
+    await this.page.getByTestId("btn-deactivate").click();
+  }
+
+  /** Deactivate on the DETAIL view: More (btn-detail-more) → Deactivate. */
+  async clickDetailDeactivate() {
+    await this.openDetailMore();
+    await this.page.getByTestId("btn-deactivate").click();
+  }
+
+  /**
+   * General Lumina active/inactive process, from the list:
+   * select rows → More → Deactivate → confirm "Deactivate".
+   * Inactive records are hidden by the default list filter (Active = Yes), so the rows
+   * must leave the list. The list must already be open.
+   */
+  async deactivate(
+    columnName: string,
+    values: string[],
+    opts: { confirmMessage?: string } = {},
+  ) {
+    await this.selectRowsByColumn(columnName, values);
+    await this.clickDeactivate();
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.confirmDialog("Deactivate");
+    for (const value of values) await this.expectRowNotInList(value);
+  }
+
+  /**
+   * Deactivate the record open in the detail view: More → Deactivate → confirm "Deactivate".
+   * What the page shows afterwards is not confirmed yet: the caller asserts the result
+   * (e.g. open the list and expect the record not shown).
+   */
+  async deactivateFromDetail(opts: { confirmMessage?: string } = {}) {
+    await this.clickDetailDeactivate();
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.confirmDialog("Deactivate");
+  }
+
+  /** Activate on the LIST (rows must be selected first): More → Activate. */
+  async clickActivate() {
+    await this.page.getByTestId("record-action-btn-more").click();
+    await this.page.getByTestId("btn-activate").click();
+  }
+
+  /** Activate on the DETAIL view: More (btn-detail-more) → Activate. */
+  async clickDetailActivate() {
+    await this.openDetailMore();
+    await this.page.getByTestId("btn-activate").click();
+  }
+
+  /**
+   * Activate from the list. Inactive rows show only with a Custom Filter, so call
+   * showInactiveOnly() first. Select rows → More → Activate → confirm "Activate".
+   * The list keeps the inactive-only filter, so the rows must leave it.
+   */
+  async activate(
+    columnName: string,
+    values: string[],
+    opts: { confirmMessage?: string } = {},
+  ) {
+    await this.selectRowsByColumn(columnName, values);
+    await this.clickActivate();
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.confirmDialog("Activate");
+    for (const value of values) await this.expectRowNotInList(value);
+  }
+
+  /**
+   * Activate the record open in the detail view: More → Activate → confirm "Activate".
+   * The caller asserts the result (e.g. open the list and expect the record shown).
+   */
+  async activateFromDetail(opts: { confirmMessage?: string } = {}) {
+    await this.clickDetailActivate();
+    if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
+    await this.confirmDialog("Activate");
+  }
+
+  // =====================================================================
+  // Custom Filter (list view)
+  // =====================================================================
+
+  /**
+   * The Custom Filter panel: the <form> that holds the Apply button (cf-apply).
+   * Condition rows have ids that change on every render (cf-row-13-field-input,
+   * cf-row-14-..., ...): only their prefix "cf-row-" and their suffix are stable.
+   */
+  protected customFilterPanel(): Locator {
+    return this.page.locator("form").filter({ has: this.page.getByTestId("cf-apply") });
+  }
+
+  /**
+   * A control of the first condition row, found by the stable id suffix:
+   * "field-input" (input name="field"), "operator-combobox" (role combobox, text "Operator"),
+   * "value-input" (input name="value").
+   */
+  protected customFilterControl(
+    part: "field-input" | "operator-combobox" | "value",
+  ): Locator {
+    const panel = this.customFilterPanel();
+    if (part !== "value") {
+      return panel.locator(`[id^="cf-row-"][id$="-${part}"]`).first();
+    }
+    // The value control shows only after an operator is picked. Its tag/suffix is not
+    // fixed by the DOM seen so far (input "-value-input" or div "-value-combobox"):
+    // take the element with role combobox whose id has "-value" (not the role=group wrapper).
+    return panel
+      .locator('[id^="cf-row-"][id*="-value"]')
+      .and(this.page.getByRole("combobox"))
+      .first();
+  }
+
+  /** Whole text of an option, trimmed, case ignored (an option may hold an icon, or CSS uppercase). */
+  private optionText(name: string): RegExp {
+    return new RegExp(`^\\s*${escapeRegExp(name)}\\s*$`, "i");
+  }
+
+  /** The open dropdown option with this text (options may render outside the panel). */
+  protected listOption(name: string): Locator {
+    const text = this.optionText(name);
+    return this.page
+      .getByRole("option")
+      .filter({ hasText: text })
+      .or(this.page.getByRole("listbox").getByText(text))
+      .first();
+  }
+
+  protected async pickListOption(name: string) {
+    await this.listOption(name).click();
+  }
+
+  /** Current shown value of a combobox: input value, or text of a div combobox. */
+  private comboboxValue(control: Locator): Promise<string> {
+    return control.evaluate((el) =>
+      el instanceof HTMLInputElement ? el.value : (el.textContent ?? "").trim(),
+    );
+  }
+
+  /**
+   * Choose a value in a combobox: open it; type only when the option does not show
+   * and the control accepts typing (a select-only dropdown must not be typed into);
+   * click the option; check the shown value. Case is ignored in the check, because
+   * the UI may show the option with CSS uppercase.
+   */
+  protected async chooseInCombobox(control: Locator, name: string) {
+    await control.click();
+    const option = this.listOption(name);
+    const shown = await option
+      .waitFor({ state: "visible", timeout: 2000 })
+      .then(() => true, () => false);
+    if (!shown) {
+      const typeable = await control.evaluate(
+        (el) => el instanceof HTMLInputElement && !el.readOnly && !el.disabled,
+      );
+      if (typeable) await control.fill(name);
+    }
+    // Bounded waits: on failure the caller still has time to report what the UI shows.
+    await option.click({ timeout: 5000 });
+    await expect
+      .poll(() => this.comboboxValue(control), { timeout: 5000 })
+      .toMatch(this.optionText(name));
+  }
+
+  /** Open the Custom Filter panel (cf-trigger). Clears a previous condition (cf-reset) if any. */
+  async openCustomFilter() {
+    await this.page.getByTestId("cf-trigger").click();
+    await expect(this.customFilterPanel()).toBeVisible();
+    const reset = this.page.getByTestId("cf-reset");
+    if (await reset.isEnabled()) await reset.click();
+  }
+
+  /**
+   * One Custom Filter condition: field → operator → value → Apply.
+   * Option texts as shown in the UI, e.g. ("Active", "=", "FALSE").
+   * The list must be open. The caller asserts the rows it expects.
+   */
+  async applyCustomFilter(field: string, operator: string, value: string) {
+    await this.openCustomFilter();
+
+    const fieldInput = this.customFilterControl("field-input");
+    await fieldInput.click();
+    await fieldInput.fill(field);
+    await this.pickListOption(field);
+    await expect(fieldInput).toHaveValue(field);
+
+    // Operator is disabled until a field is chosen; it is a <div role="combobox">.
+    const operatorBox = this.customFilterControl("operator-combobox");
+    await operatorBox.click();
+    await this.pickListOption(operator);
+    await expect(operatorBox).toHaveText(operator);
+
+    const valueBox = this.customFilterControl("value");
+    try {
+      await this.chooseInCombobox(valueBox, value);
+    } catch (e) {
+      // Show what the filter row and the open dropdown really hold.
+      const row = await this.customFilterPanel()
+        .locator('[id^="cf-row-"][id$="-field"]')
+        .first()
+        .evaluate((el) =>
+          (el.parentElement?.outerHTML ?? "")
+            .replace(/<style[\s\S]*?<\/style>/g, "")
+            .replace(/<svg[\s\S]*?<\/svg>/g, "<svg/>")
+            .replace(/\s+/g, " ")
+            .slice(0, 1500),
+        )
+        .catch(() => "(row not readable)");
+      const options = await this.page
+        .getByRole("option")
+        .allInnerTexts()
+        .catch(() => []);
+      if (e instanceof Error) {
+        e.message += `\nCustom Filter value "${value}" not chosen.\nOptions shown: ${JSON.stringify(options)}\nRow HTML: ${row}`;
+      }
+      throw e;
+    }
+
+    await this.page.getByTestId("cf-apply").click();
+    await this.expectTableLoaded();
+  }
+
+  /** List inactive records only: Custom Filter Active = FALSE (CF_INACTIVE_ONLY). */
+  async showInactiveOnly() {
+    const { field, operator, value } = CF_INACTIVE_ONLY;
+    await this.applyCustomFilter(field, operator, value);
   }
 
   // =====================================================================
@@ -325,19 +679,42 @@ export abstract class BasePage {
   }
 
   /**
-   * Detail view field value. DOM:
+   * Detail view field value: the first element after the label. DOM:
    * <div>
    *   <div><p>{Label}</p></div>
-   *   <p>{Value}</p>
+   *   <p>{Value}</p>              <- text value
+   *   or <a href="...">{Value}</a> / <p><a>{Value}</a></p>   <- hyperlink value
    * </div>
    */
   protected detailValue(label: string): Locator {
     return this.page.locator(
-      `xpath=//div[p[normalize-space()='${label}']]/following-sibling::p[1]`,
+      `xpath=//div[p[normalize-space()='${label}']]/following-sibling::*[1]`,
     );
   }
 
-  /** Exact text, case-sensitive. "" (or spaces) = must be empty, shown as "-". */
+  /** The hyperlink of a detail field: the value element itself, or a link inside it. */
+  protected detailLink(label: string): Locator {
+    const value = this.detailValue(label);
+    return value.and(this.page.getByRole("link")).or(value.getByRole("link"));
+  }
+
+  /** The field value is a hyperlink with this exact text (after trim). */
+  async expectDetailLink(label: string, text: string) {
+    const link = this.detailLink(label);
+    await expect(link).toHaveCount(1);
+    await expect(link).toHaveText(text.trim());
+  }
+
+  /** Click the hyperlink of a detail field (opens the linked record). */
+  async openDetailLink(label: string) {
+    await this.detailLink(label).click();
+  }
+
+  /**
+   * Exact text, case-sensitive. "" (or spaces) = must be empty, shown as "-".
+   * Works the same for a text value (<p>) and a hyperlink value (<a>): the test does not
+   * need to know which fields are links. Use expectDetailLink only to assert it IS a link.
+   */
   async expectDetailValue(label: string, value: string) {
     const shown = value.trim() === "" ? DETAIL_EMPTY_DISPLAY : value.trim();
     await expect(this.detailValue(label)).toHaveText(shown);
@@ -365,7 +742,7 @@ export abstract class BasePage {
       if (!label) {
         throw new Error(`No detail label for field "${String(key)}". Add it to DETAIL_LABELS.`);
       }
-      await this.expectDetailValue(label, value);
+      await this.expectDetailValue(label, value); // text or hyperlink, see detailValue()
     }
   }
 
@@ -392,6 +769,29 @@ export abstract class BasePage {
    */
   async expectMessage(message: string) {
     await expect(this.page.getByText(message, { exact: true }).first()).toBeVisible();
+  }
+
+  /**
+   * Where toasts render. The toast DOM is not confirmed yet, so this is the whole page:
+   * once known, return the toast container (e.g. getByRole("alert") or its id) so a
+   * toast cannot be confused with the same text inline. Change only here.
+   */
+  protected toastScope(): Locator {
+    return this.page.locator("body");
+  }
+
+  /**
+   * A toast shows this message: exact text (string) or an anchored pattern (RegExp).
+   * Toasts close by themselves after a few seconds: call this right after the action,
+   * with no wait, screenshot or navigation in between; take the evidence screenshot
+   * right after it.
+   */
+  async expectToast(message: string | RegExp) {
+    const toast =
+      typeof message === "string"
+        ? this.toastScope().getByText(message, { exact: true })
+        : this.toastScope().getByText(message);
+    await expect(toast.first()).toBeVisible();
   }
 
   // =====================================================================
