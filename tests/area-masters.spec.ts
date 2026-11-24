@@ -1,8 +1,17 @@
 /**
- * MOM-98 Area Masters — automation (FSD Section 9), positive and negative.
+ * MOM-98 Area Masters — automation of FSD Section 9, run by TCMS (ZSN_ETCMS001).
  *
- * One file per menu (AUTOMATION_RULES Section 1.1). Tests follow FSD Section 9 order
- * and are tagged by the FSD Type: run a subset with --grep @positive / --grep @negative.
+ * TEST DATA: only from the TCMS run setup file (RUN_SETUP_FILE), through `data.get("DS-MOM98-..")`.
+ * Data sets: test-data/data-sets/MOM-98 Area Masters - Data Set.md (proposed Section 9.1; FSD
+ * MOM-98 is still in the old Section 9 format). Local sample: test-data/run-setup/mom98.sample.json.
+ * The script makes no value: no uid(), no Date.now(). The provider creates the Setup data sets
+ * before the test body and deletes what it created by record number after the test, also when
+ * the setup fails. A test that creates an Input data set calls `data.created(ds)`.
+ *
+ * Tags: @positive / @negative (FSD Type) and @TC-MOM98-xxx (TCMS selects by ID).
+ * Annotation tc-version = the MOM-98 test case version the script was built from (FR-80).
+ * Variations (TCMS open item #14: in the script, from the TCMS values): lower case, spaces
+ * around, upper case. Each test that uses one says so in a "variation" annotation.
  *
  * Automated:
  *  - @positive: 001, 005, 008, 009, 013, 014, 015, 018, 020, 021, 022, 024, 025, 032, 033, 034
@@ -10,18 +19,16 @@
  *  Partial (see the annotation in each test): 001, 027, 032, 035.
  *  Additional QA Recommendation (not in FSD Section 9), @negative: QA-MOM98-010a, 010b, 010c
  *  (mandatory fields left empty, both and one at a time; TC-010 covers spaces only).
+ *  Tagged @QA-...: they run from a local run setup only; TCMS sends FSD test cases only.
  *
  * Not automated:
  *  - 002, 003 (Custom Filter / Quick Search: no BasePage function yet)
  *  - 006 (Active read only on New/Edit: Active has no locator, its DOM is not confirmed)
  *  - 011 (positive, typing over the max length: not automated yet)
  *  - 012, 030, 041, 042, 043 (API requests: no API client yet)
- *  - 017, 028, 029, 031, 036 (an area or a child record becomes inactive: the active/inactive process is not automated)
+ *  - 017, 028, 029, 031, 036 (an area or a child record becomes inactive: not automated yet)
  *  - 039, 040 (authorization: needs a second login without the action)
  *
- * Test data: every test makes its own areas through the UI, with a unique suffix and a
- * unique factory, then afterEach deletes them (storage locations first, then areas).
- * Not yet on TCMS data sets: MOM-98 Section 9 is still in the old format (no 9.1 Data Set).
  * Messages: generic checks expect MOM-0029 (STD_MESSAGES / STD_DIALOGS), as FSD Section 9
  * states; MOM-98 business rules expect the FSD text (AM_MESSAGES). Where the FSD does not
  * say where a message shows, the test only checks that the exact text is on the page.
@@ -34,53 +41,45 @@
  * "Another user": a second page in the same browser context (same login).
  * Server errors: simulated with failApi() (network interception), no backend change needed.
  * Login is expected from the Playwright config (storageState).
+ * Retries must be 0 in TCMS runs: a retry would create the same dummy values again.
  * Evidence: each test ends with attachScreenshot() — only reached when every step passed.
  */
-import { test, type Page } from "@playwright/test";
-import {
-  AM_MESSAGES,
-  AreaMastersPage,
-} from "@menus/area-masters/AreaMastersPage";
-import { StorageLocationsPage } from "@menus/storage-locations/StorageLocationsPage";
-import { STD_DIALOGS, STD_MESSAGES } from "@core/constants"; // duplicate toast: AreaMastersPage.expectDuplicateToast
+import type { Page } from "@playwright/test";
+import { test } from "@tcms/fixtures";
+import type { DataProvider } from "@tcms/dataProvider";
+import { AM_MESSAGES, AreaMastersPage } from "@menus/area-masters/AreaMastersPage";
+import { toAreaMaster } from "@menus/area-masters/area-master.tcms";
 import type { AreaMaster } from "@menus/area-masters/area-master.data";
+import { STD_DIALOGS, STD_MESSAGES } from "@core/constants"; // duplicate toast: AreaMastersPage.expectDuplicateToast
 import { attachScreenshot } from "@utils/screenshot";
 import { failApi } from "@utils/network";
 
 /** API calls of this menu (assumed path). The page URL also matches, but failApi() skips page loads. */
 const AM_API = /area-?masters?/i;
 
-const POSITIVE = { tag: "@positive" };
-const NEGATIVE = { tag: "@negative" };
-
-const uid = () =>
-  (Date.now().toString(36) + Math.random().toString(36).slice(2, 4))
-    .slice(-6)
-    .toUpperCase();
-/** 7 chars, under the 10-char Factory limit, unique per call. */
-const factoryCode = () => `F${uid()}`;
-
 const shot = (step: string) => `Area Masters - ${step}`;
 
 test.describe("MOM-98 Area Masters", () => {
   let areaPage: AreaMastersPage;
-  let created: string[];
-  let slocs: string[];
   let extraPages: Page[];
 
-  const createArea = async (data: AreaMaster) => {
+  /** Page Object data of an area data set, with test-specific changes. */
+  const area = (data: DataProvider, ds: string, changes: Partial<AreaMaster> = {}): AreaMaster => ({
+    ...toAreaMaster(data.get(ds).values),
+    ...changes,
+  });
+
+  /** Create the area of an Input data set through the menu, and hand it to cleanup. */
+  const createArea = async (data: DataProvider, ds: string, value: AreaMaster) => {
     await areaPage.open();
-    await areaPage.create(data);
-    created.push(data.name.trim());
+    await areaPage.create(value);
+    await data.created(ds);
   };
-  const rename = (oldName: string, newName: string) => {
-    created = created.filter((n) => n !== oldName).concat(newName);
-  };
-  const untrack = (...names: string[]) => {
-    created = created.filter((n) => !names.includes(n));
-  };
+
   const partial = (description: string) =>
     test.info().annotations.push({ type: "partial", description });
+  const variation = (description: string) =>
+    test.info().annotations.push({ type: "variation", description });
 
   /** A second page in the same login, used as "another user". */
   const anotherUser = async (page: Page) => {
@@ -89,206 +88,106 @@ test.describe("MOM-98 Area Masters", () => {
     return other;
   };
 
-  /** A storage location (MOM-113) that points to the area: a child record. */
-  const addStorageLocation = async (page: Page, area: string) => {
-    const name = `SLOC ${uid()}`;
-    const slocPage = new StorageLocationsPage(page);
-    await slocPage.open();
-    await slocPage.create({ area, name });
-    slocs.push(name);
-    return name;
-  };
-
   test.beforeEach(async ({ page }) => {
     areaPage = new AreaMastersPage(page);
-    created = [];
-    slocs = [];
     extraPages = [];
     // Leaving a refused form may raise a browser "leave page?" prompt: accept it.
     page.on("dialog", (dialog) => dialog.accept());
   });
 
   test.afterEach(async ({ page }) => {
+    // The data cleanup runs after this hook, in the TCMS fixture, by record number.
     await page.unrouteAll({ behavior: "ignoreErrors" });
     for (const other of extraPages) await other.close();
-    // Storage locations first: an area in use cannot be deleted.
-    if (slocs.length) {
-      try {
-        const slocPage = new StorageLocationsPage(page);
-        await slocPage.open();
-        await slocPage.delete([...new Set(slocs)]);
-      } catch (e) {
-        console.warn(
-          `Cleanup failed for storage locations: ${slocs.join(", ")}`,
-          e,
-        );
-      }
-    }
-    if (created.length) {
-      try {
-        await areaPage.open();
-        await areaPage.delete([...new Set(created)]);
-      } catch (e) {
-        console.warn(`Cleanup failed for areas: ${created.join(", ")}`, e);
-      }
-    }
   });
 
   // ---------- 9.1 List and Area Page ----------
 
-  test(
-    "TC-MOM98-001 List loads with the FSD columns",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      partial(
-        "Inactive area hidden by default is not checked: needs the active/inactive process.",
-      );
-      await areaPage.open();
-      await areaPage.expectListColumns([
-        "Factory",
-        "Name",
-        "Floor",
-        "Division",
-        "Description",
-        "Remark",
-        "Active",
-      ]);
+  test("TC-MOM98-001 List loads with the FSD columns", { tag: ["@positive", "@TC-MOM98-001"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data: _noDataSets }, testInfo) => {
+    partial("Inactive area hidden by default is not checked: needs the active/inactive process.");
+    await areaPage.open();
+    await areaPage.expectListColumns([
+      "Factory",
+      "Name",
+      "Floor",
+      "Division",
+      "Description",
+      "Remark",
+      "Active",
+    ]);
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-001 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-001 List view"));
+  });
 
-  test(
-    "TC-MOM98-004 The list fails to load",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      await failApi(page, AM_API, ["GET"]);
+  test("TC-MOM98-004 The list fails to load", { tag: ["@negative", "@TC-MOM98-004"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data: _noDataSets }, testInfo) => {
+    await failApi(page, AM_API, ["GET"]);
 
-      await areaPage.goto(areaPage.path);
-      await areaPage.expectMessage(AM_MESSAGES.listLoadFailed);
+    await areaPage.goto(areaPage.path);
+    await areaPage.expectMessage(AM_MESSAGES.listLoadFailed);
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-004 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-004 List view"));
+  });
 
-  test(
-    "TC-MOM98-005 Open an area shows every field",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const data: AreaMaster = {
-        factory: factoryCode(),
-        name: `PROD LINE 1 ${uid()}`,
-        floor: "1",
-        division: "SMT",
-        description: "Line 1",
-        remark: "Main line",
-      };
-      await createArea(data);
+  test("TC-MOM98-005 Open an area shows every field", { tag: ["@positive", "@TC-MOM98-005"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-01");
 
-      await areaPage.openDetail(data.name); // H6 title = Name
-      await areaPage.expectDetail(data);
+    await areaPage.openDetail(value.name); // H6 title = Name
+    await areaPage.expectDetail(value);
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-005 Detail view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-005 Detail view"));
+  });
 
-  test(
-    "TC-MOM98-007 The area page fails to load",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const name = `PROD LINE 1 ${uid()}`;
-      await createArea({ factory: factoryCode(), name });
+  test("TC-MOM98-007 The area page fails to load", { tag: ["@negative", "@TC-MOM98-007"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const { name } = area(data, "DS-MOM98-01");
 
-      await areaPage.open();
-      await failApi(page, AM_API, ["GET"]);
-      await areaPage.openDetailByColumn("Name", name);
-      await areaPage.expectMessage(AM_MESSAGES.detailLoadFailed);
+    await areaPage.open();
+    await failApi(page, AM_API, ["GET"]);
+    await areaPage.openDetailByColumn("Name", name);
+    await areaPage.expectMessage(AM_MESSAGES.detailLoadFailed);
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-007 Detail view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-007 Detail view"));
+  });
 
   // ---------- 9.2 Create ----------
 
-  test(
-    "TC-MOM98-008 Create an area with all fields",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const data: AreaMaster = {
-        factory: factoryCode(),
-        name: `PROD LINE 2 ${uid()}`,
-        floor: "16#5",
-        division: "SMT",
-        description: "Line 2 floor",
-        remark: "New",
-      };
-      await createArea(data); // asserts H6 title = Name
-      await areaPage.expectDetail(data); // Floor 16#5 accepted as entered
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-008 Step 3 Detail view setelah Create"),
-      );
+  test("TC-MOM98-008 Create an area with all fields", { tag: ["@positive", "@TC-MOM98-008"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-02");
+    await createArea(data, "DS-MOM98-02", value); // asserts H6 title = Name
+    await areaPage.expectDetail(value); // Floor 16#5 accepted as entered
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-008 Step 3 Detail view setelah Create"));
 
-      await areaPage.open();
-      await areaPage.expectInList(data.name, data.factory);
+    await areaPage.open();
+    await areaPage.expectInList(value.name, value.factory);
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-008 Step 4 List view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-008 Step 4 List view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-009 Create an area with mandatory fields only",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const data: AreaMaster = {
-        factory: factoryCode(),
-        name: `QC 2 ${uid()}`,
-      };
-      await createArea(data);
+  test("TC-MOM98-009 Create an area with mandatory fields only", { tag: ["@positive", "@TC-MOM98-009"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-03");
+    await createArea(data, "DS-MOM98-03", value);
 
-      await areaPage.openDetail(data.name);
-      await areaPage.expectDetail({
-        ...data,
-        floor: "",
-        division: "",
-        description: "",
-        remark: "",
-      });
+    await areaPage.openDetail(value.name);
+    await areaPage.expectDetail({
+      ...value,
+      floor: "",
+      division: "",
+      description: "",
+      remark: "",
+    });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-009 Detail view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-009 Detail view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-010 Factory and Name with only spaces are refused",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      await areaPage.open();
-      await areaPage.startCreate({ factory: "  ", name: "   " });
-      await areaPage.trySave();
+  test("TC-MOM98-010 Factory and Name with only spaces are refused", { tag: ["@negative", "@TC-MOM98-010"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data: _noDataSets }, testInfo) => {
+    await areaPage.open();
+    await areaPage.startCreate({ factory: "  ", name: "   " }); // spaces only: literal from the FSD step
+    await areaPage.trySave();
 
-      await areaPage.expectFieldErrors(
-        ["factory", "name"],
-        STD_MESSAGES.required,
-      );
-      await areaPage.expectFormStillOpen(); // nothing is saved
+    await areaPage.expectFieldErrors(["factory", "name"], STD_MESSAGES.required);
+    await areaPage.expectFormStillOpen(); // nothing is saved
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-010 Detail view setelah Create ditolak"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-010 Detail view setelah Create ditolak"));
+  });
 
   // Additional QA Recommendation: FSD Section 9 has no case for mandatory fields left
   // EMPTY (TC-010 covers spaces only, both fields at once). One field at a time shows
@@ -296,594 +195,329 @@ test.describe("MOM-98 Area Masters", () => {
   const REQUIRED_EMPTY_CASES: {
     id: string;
     title: string;
-    data: (name: string) => Partial<AreaMaster>;
+    data: (data: DataProvider) => Partial<AreaMaster>;
     empty: (keyof AreaMaster)[];
   }[] = [
-    {
-      id: "QA-MOM98-010a",
-      title: "Factory and Name left empty",
-      data: () => ({}),
-      empty: ["factory", "name"],
-    },
-    {
-      id: "QA-MOM98-010b",
-      title: "Factory left empty",
-      data: (name) => ({ name }),
-      empty: ["factory"],
-    },
-    {
-      id: "QA-MOM98-010c",
-      title: "Name left empty",
-      data: () => ({ factory: factoryCode() }),
-      empty: ["name"],
-    },
+    { id: "QA-MOM98-010a", title: "Factory and Name left empty", data: () => ({}), empty: ["factory", "name"] },
+    { id: "QA-MOM98-010b", title: "Factory left empty", data: (d) => ({ name: area(d, "DS-MOM98-03").name }), empty: ["factory"] },
+    { id: "QA-MOM98-010c", title: "Name left empty", data: (d) => ({ factory: area(d, "DS-MOM98-03").factory }), empty: ["name"] },
   ];
 
   for (const c of REQUIRED_EMPTY_CASES) {
-    test(
-      `${c.id} ${c.title} is refused`,
-      NEGATIVE,
-      async ({ page }, testInfo) => {
-        test.info().annotations.push({
-          type: "classification",
-          description:
-            "Additional QA Recommendation (FR-30, MOM-0029 FR-460). Not a test case in FSD MOM-98 Section 9.",
-        });
-        const data = c.data(`QC REQ ${uid()}`);
+    test(`${c.id} ${c.title} is refused`, { tag: ["@negative", `@${c.id}`], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+      test.info().annotations.push({
+        type: "classification",
+        description: "Additional QA Recommendation (FR-30, MOM-0029 FR-460). Not a test case in FSD MOM-98 Section 9.",
+      });
+      const value = c.data(data);
 
+      await areaPage.open();
+      await areaPage.startCreate(value); // empty fields are not touched
+      await areaPage.trySave();
+
+      await areaPage.expectFieldErrors(c.empty, STD_MESSAGES.required);
+      await areaPage.expectFormStillOpen(); // nothing is saved
+      await attachScreenshot(page, testInfo, shot(`${c.id} Detail view setelah Create ditolak`));
+
+      if (value.name) {
         await areaPage.open();
-        await areaPage.startCreate(data); // empty fields are not touched
-        await areaPage.trySave();
+        await areaPage.expectNotInList(value.name); // nothing is saved
 
-        await areaPage.expectFieldErrors(c.empty, STD_MESSAGES.required);
-        await areaPage.expectFormStillOpen(); // nothing is saved
-        await attachScreenshot(
-          page,
-          testInfo,
-          shot(`${c.id} Detail view setelah Create ditolak`),
-        );
-
-        if (data.name) {
-          await areaPage.open();
-          await areaPage.expectNotInList(data.name); // nothing is saved
-
-          await attachScreenshot(page, testInfo, shot(`${c.id} List view`));
-        }
-      },
-    );
+        await attachScreenshot(page, testInfo, shot(`${c.id} List view`));
+      }
+    });
   }
 
-  test(
-    "TC-MOM98-013 Factory and Name are saved trimmed",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const factory = factoryCode();
-      const name = `QC 4 ${uid()}`;
-      await createArea({ factory: ` ${factory} `, name: ` ${name} ` });
+  test("TC-MOM98-013 Factory and Name are saved trimmed", { tag: ["@positive", "@TC-MOM98-013"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory and Name of DS-MOM98-03 typed with one space before and after.");
+    const value = area(data, "DS-MOM98-03");
+    await createArea(data, "DS-MOM98-03", { factory: ` ${value.factory} `, name: ` ${value.name} ` });
 
-      await areaPage.openDetail(name); // H6 title = trimmed Name
-      await areaPage.expectDetail({ factory, name });
+    await areaPage.openDetail(value.name); // H6 title = trimmed Name
+    await areaPage.expectDetail({ factory: value.factory, name: value.name });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-013 Detail view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-013 Detail view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-014 Factory is saved with the existing spelling on create",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const factory = factoryCode();
-      const id = uid();
-      await createArea({ factory, name: `MAIN STORE ${id}` });
-      await createArea({ factory: factory.toLowerCase(), name: `QC 5 ${id}` });
+  test("TC-MOM98-014 Factory is saved with the existing spelling on create", { tag: ["@positive", "@TC-MOM98-014"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory of DS-MOM98-05 (= factory of DS-MOM98-04) typed in lower case.");
+    const existing = area(data, "DS-MOM98-04");
+    const value = area(data, "DS-MOM98-05");
+    await createArea(data, "DS-MOM98-05", { ...value, factory: value.factory.toLowerCase() });
 
-      await areaPage.open();
-      await areaPage.expectInList(`QC 5 ${id}`, factory);
+    await areaPage.open();
+    await areaPage.expectInList(value.name, existing.factory); // existing spelling
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-014 List view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-014 List view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-015 A new factory is saved as entered",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const factory = factoryCode().toLowerCase();
-      const name = `QC 9 ${uid()}`;
-      await createArea({ factory, name });
+  test("TC-MOM98-015 A new factory is saved as entered", { tag: ["@positive", "@TC-MOM98-015"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-06"); // factory starts in lower case (f + code)
+    await createArea(data, "DS-MOM98-06", value);
 
-      await areaPage.openDetail(name);
-      await areaPage.expectDetail({ factory }); // saved as entered (lowercase)
+    await areaPage.openDetail(value.name);
+    await areaPage.expectDetail({ factory: value.factory }); // saved as entered
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-015 Detail view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-015 Detail view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-016 Duplicate name in the same factory, different case and spaces",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const existing: AreaMaster = {
-        factory: factoryCode(),
-        name: `MAIN STORE ${uid()}`,
-      };
-      await createArea(existing);
-      const lowerName = existing.name.toLowerCase();
+  test("TC-MOM98-016 Duplicate name in the same factory, different case and spaces", { tag: ["@negative", "@TC-MOM98-016"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory and Name of DS-MOM98-04 in lower case, with one space before and after.");
+    const existing = area(data, "DS-MOM98-04");
+    const lowerFactory = existing.factory.toLowerCase();
+    const lowerName = existing.name.toLowerCase();
 
-      await areaPage.open();
-      await areaPage.startCreate({
-        factory: ` ${existing.factory.toLowerCase()} `,
-        name: ` ${lowerName} `,
-      });
-      await areaPage.trySave();
-      // Toast (not the MOM-0029 modal). Typed or existing spelling: not confirmed yet, accept both.
-      await areaPage.expectDuplicateToast(
-        [existing.factory.toLowerCase(), existing.factory],
-        [lowerName, existing.name],
-      );
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-016 Detail view setelah Create ditolak"),
-      ); // right after the toast
+    await areaPage.open();
+    await areaPage.startCreate({ factory: ` ${lowerFactory} `, name: ` ${lowerName} ` });
+    await areaPage.trySave();
+    // Toast (not the MOM-0029 modal). Typed or existing spelling: not confirmed yet, accept both.
+    await areaPage.expectDuplicateToast([lowerFactory, existing.factory], [lowerName, existing.name]);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-016 Detail view setelah Create ditolak")); // right after the toast
 
-      await areaPage.open();
-      await areaPage.expectInList(existing.name, existing.factory);
-      await areaPage.expectNotInList(lowerName); // nothing is saved
+    await areaPage.open();
+    await areaPage.expectInList(existing.name, existing.factory);
+    await areaPage.expectNotInList(lowerName); // nothing is saved
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-016 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-016 List view"));
+  });
 
-  test(
-    "TC-MOM98-018 Same name in two factories is allowed",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const f1 = factoryCode();
-      const f2 = factoryCode();
-      const name = `MAIN STORE ${uid()}`;
-      await createArea({ factory: f1, name });
-      await createArea({ factory: f2, name });
+  test("TC-MOM98-018 Same name in two factories is allowed", { tag: ["@positive", "@TC-MOM98-018"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const first = area(data, "DS-MOM98-04");
+    const second = area(data, "DS-MOM98-07"); // same Name, factory G + code
+    await createArea(data, "DS-MOM98-07", second);
 
-      await areaPage.open();
-      await areaPage.expectInList(name, f1);
-      await areaPage.expectInList(name, f2);
+    await areaPage.open();
+    await areaPage.expectInList(first.name, first.factory);
+    await areaPage.expectInList(second.name, second.factory);
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-018 List view setelah Create"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-018 List view setelah Create"));
+  });
 
-  test(
-    "TC-MOM98-019 Create fails on a database error",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const data: AreaMaster = {
-        factory: factoryCode(),
-        name: `TEST ${uid()}`,
-      };
-      await areaPage.open();
-      await areaPage.startCreate(data);
-      const stop = await failApi(page, AM_API, ["POST", "PUT"]);
+  test("TC-MOM98-019 Create fails on a database error", { tag: ["@negative", "@TC-MOM98-019"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-03");
+    await areaPage.open();
+    await areaPage.startCreate(value);
+    const stop = await failApi(page, AM_API, ["POST", "PUT"]);
 
-      await areaPage.trySave();
-      await areaPage.expectMessage(AM_MESSAGES.saveFailed);
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-019 Detail view setelah Create gagal"),
-      );
+    await areaPage.trySave();
+    await areaPage.expectMessage(AM_MESSAGES.saveFailed);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-019 Detail view setelah Create gagal"));
 
-      await stop();
-      await areaPage.open();
-      await areaPage.expectNotInList(data.name); // nothing is saved
+    await stop();
+    await areaPage.open();
+    await areaPage.expectNotInList(value.name); // nothing is saved
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-019 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-019 List view"));
+  });
 
   // ---------- 9.3 Edit ----------
 
-  test(
-    "TC-MOM98-020 Edit the name and the division",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const id = uid();
-      const oldName = `QC ${id}`;
-      const newName = `QC AREA ${id}`;
-      await createArea({ factory: factoryCode(), name: oldName });
+  test("TC-MOM98-020 Edit the name and the division", { tag: ["@positive", "@TC-MOM98-020"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const oldName = area(data, "DS-MOM98-08").name;
+    const changes = toAreaMaster(data.get("DS-MOM98-09").values); // new Name and Division
 
-      await areaPage.open();
-      await areaPage.update(oldName, { name: newName, division: "QA" });
-      rename(oldName, newName);
+    await areaPage.open();
+    await areaPage.update(oldName, changes);
 
-      await areaPage.openDetail(newName); // H6 title = new Name
-      await areaPage.expectDetail({ name: newName, division: "QA" });
+    await areaPage.openDetail(changes.name); // H6 title = new Name
+    await areaPage.expectDetail(changes);
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-020 Detail view setelah Update"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-020 Detail view setelah Update"));
+  });
 
-  test(
-    "TC-MOM98-021 Edit without changing the name is not a duplicate",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const data: AreaMaster = {
-        factory: factoryCode(),
-        name: `MAIN STORE ${uid()}`,
-      };
-      await createArea(data);
+  test("TC-MOM98-021 Edit without changing the name is not a duplicate", { tag: ["@positive", "@TC-MOM98-021"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const value = area(data, "DS-MOM98-04");
 
-      await areaPage.open();
-      await areaPage.update(data.name, { remark: "Updated" }); // asserts no Duplicate Record modal
+    await areaPage.open();
+    await areaPage.update(value.name, { remark: "Updated" }); // asserts no Duplicate Record modal
 
-      await areaPage.openDetail(data.name); // H6 title = Name
-      await areaPage.expectDetail({ ...data, remark: "Updated" });
+    await areaPage.openDetail(value.name); // H6 title = Name
+    await areaPage.expectDetail({ ...value, remark: "Updated" });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-021 Detail view setelah Update"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-021 Detail view setelah Update"));
+  });
 
-  test(
-    "TC-MOM98-022 Change only the case of the area's own name",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const id = uid().toLowerCase();
-      const oldName = `Main Store ${id}`;
-      const newName = oldName.toUpperCase();
-      await createArea({ factory: factoryCode(), name: oldName });
+  test("TC-MOM98-022 Change only the case of the area's own name", { tag: ["@positive", "@TC-MOM98-022"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Name of DS-MOM98-11 (\"Main Store ...\") changed to upper case.");
+    const oldName = area(data, "DS-MOM98-11").name;
+    const newName = oldName.toUpperCase();
 
-      await areaPage.open();
-      await areaPage.update(oldName, { name: newName });
-      rename(oldName, newName);
+    await areaPage.open();
+    await areaPage.update(oldName, { name: newName });
 
-      await areaPage.openDetail(newName); // H6 title, exact case
-      await areaPage.expectDetail({ name: newName });
+    await areaPage.openDetail(newName); // H6 title, exact case
+    await areaPage.expectDetail({ name: newName });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-022 Detail view setelah Update"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-022 Detail view setelah Update"));
+  });
 
-  test(
-    "TC-MOM98-023 Move an area to a factory where the name exists",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const f1 = factoryCode();
-      const f2 = factoryCode();
-      const name = `QC ${uid()}`;
-      await createArea({ factory: f1, name });
-      await createArea({ factory: f2, name });
+  test("TC-MOM98-023 Move an area to a factory where the name exists", { tag: ["@negative", "@TC-MOM98-023"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory of DS-MOM98-10 typed in lower case.");
+    const moved = area(data, "DS-MOM98-08"); // factory F + code
+    const other = area(data, "DS-MOM98-10"); // same Name, factory G + code
+    const typed = other.factory.toLowerCase();
 
-      await areaPage.open();
-      // The same name is in both factories: open the row by its factory (f1 holds only this area).
-      await areaPage.startEdit(
-        name,
-        { factory: f2.toLowerCase() },
-        { byFactory: f1 },
-      );
-      await areaPage.trySave();
-      // Toast. FSD expects the existing spelling of F2; the typed "f2" is also accepted until confirmed.
-      await areaPage.expectDuplicateToast([f2.toLowerCase(), f2], name);
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-023 Detail view setelah Update ditolak"),
-      ); // right after the toast
+    await areaPage.open();
+    // The same name is in both factories: open the row by its factory (it holds only this area).
+    await areaPage.startEdit(moved.name, { factory: typed }, { byFactory: moved.factory });
+    await areaPage.trySave();
+    // Toast. FSD expects the existing spelling; the typed spelling is also accepted until confirmed.
+    await areaPage.expectDuplicateToast([typed, other.factory], moved.name);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-023 Detail view setelah Update ditolak")); // right after the toast
 
-      await areaPage.open();
-      await areaPage.expectInList(name, f1); // the area stays in F1
-      await areaPage.expectInList(name, f2);
+    await areaPage.open();
+    await areaPage.expectInList(moved.name, moved.factory); // the area stays in its factory
+    await areaPage.expectInList(other.name, other.factory);
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-023 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-023 List view"));
+  });
 
-  test(
-    "TC-MOM98-024 Factory is saved with the existing spelling on edit",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const f1 = factoryCode();
-      const f2 = factoryCode();
-      const id = uid();
-      const name = `QC 6 ${id}`;
-      await createArea({ factory: f1, name });
-      await createArea({ factory: f2, name: `MAIN STORE ${id}` });
+  test("TC-MOM98-024 Factory is saved with the existing spelling on edit", { tag: ["@positive", "@TC-MOM98-024"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory of DS-MOM98-13 typed in lower case.");
+    const value = area(data, "DS-MOM98-12");
+    const target = area(data, "DS-MOM98-13");
 
-      await areaPage.open();
-      await areaPage.update(name, { factory: f2.toLowerCase() });
+    await areaPage.open();
+    await areaPage.update(value.name, { factory: target.factory.toLowerCase() });
 
-      await areaPage.openDetail(name);
-      await areaPage.expectDetail({ factory: f2 }); // existing spelling
+    await areaPage.openDetail(value.name);
+    await areaPage.expectDetail({ factory: target.factory }); // existing spelling
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-024 Detail view setelah Update"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-024 Detail view setelah Update"));
+  });
 
-  test(
-    "TC-MOM98-025 On edit, the area itself is not used for the factory spelling",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const factoryLower = factoryCode().toLowerCase();
-      const name = `QC 7 ${uid()}`;
-      await createArea({ factory: factoryLower, name });
+  test("TC-MOM98-025 On edit, the area itself is not used for the factory spelling", { tag: ["@positive", "@TC-MOM98-025"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    variation("Factory of DS-MOM98-14 (\"f...\") changed to upper case.");
+    const value = area(data, "DS-MOM98-14");
+    const upper = value.factory.toUpperCase();
 
-      await areaPage.open();
-      await areaPage.update(name, { factory: factoryLower.toUpperCase() });
+    await areaPage.open();
+    await areaPage.update(value.name, { factory: upper });
 
-      await areaPage.openDetail(name);
-      await areaPage.expectDetail({ factory: factoryLower.toUpperCase() });
+    await areaPage.openDetail(value.name);
+    await areaPage.expectDetail({ factory: upper });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-025 Detail view setelah Update"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-025 Detail view setelah Update"));
+  });
 
-  test(
-    "TC-MOM98-026 Edit an area that another user deleted",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const name = `QC 8 ${uid()}`;
-      await createArea({ factory: factoryCode(), name });
+  test("TC-MOM98-026 Edit an area that another user deleted", { tag: ["@negative", "@TC-MOM98-026"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const { name } = area(data, "DS-MOM98-15");
 
-      await areaPage.open();
-      await areaPage.startEdit(name, { remark: "X" });
+    await areaPage.open();
+    await areaPage.startEdit(name, { remark: "X" });
 
-      const other = new AreaMastersPage(await anotherUser(page));
-      await other.open();
-      await other.delete([name]);
-      untrack(name);
+    await data.remove("DS-MOM98-15", await anotherUser(page)); // user B, by record number
 
-      await areaPage.trySave();
-      await areaPage.expectDialogWithTitle(
-        STD_DIALOGS.deleted.title,
-        STD_DIALOGS.deleted.text,
-      );
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-026 Step 2 Detail view setelah Update ditolak"),
-      );
+    await areaPage.trySave();
+    await areaPage.expectDialogWithTitle(STD_DIALOGS.deleted.title, STD_DIALOGS.deleted.text);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-026 Step 2 Detail view setelah Update ditolak"));
 
-      await areaPage.confirmDialog("Back to List");
-      await areaPage.expectTableLoaded();
-      await areaPage.expectNotInList(name);
+    await areaPage.confirmDialog("Back to List");
+    await areaPage.expectTableLoaded();
+    await areaPage.expectNotInList(name);
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-026 Step 3 List view"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-026 Step 3 List view"));
+  });
 
-  test(
-    "TC-MOM98-027 Edit an area that another user changed",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      partial(
-        '"No overwrite option is offered" is not checked: no BasePage function to check a dialog has no such button.',
-      );
-      const name = `QC 10 ${uid()}`;
-      await createArea({ factory: factoryCode(), name }); // no Division, no Remark
+  test("TC-MOM98-027 Edit an area that another user changed", { tag: ["@negative", "@TC-MOM98-027"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    partial("\"No overwrite option is offered\" is not checked: no BasePage function to check a dialog has no such button.");
+    const { name } = area(data, "DS-MOM98-16"); // no Division, no Remark
 
-      await areaPage.open();
-      await areaPage.startEdit(name, { remark: "Tester" });
+    await areaPage.open();
+    await areaPage.startEdit(name, { remark: "Tester" });
 
-      const other = new AreaMastersPage(await anotherUser(page));
-      await other.open();
-      await other.update(name, { division: "SMT" });
+    const other = new AreaMastersPage(await anotherUser(page));
+    await other.open();
+    await other.update(name, { division: "SMT" });
 
-      await areaPage.trySave();
-      await areaPage.expectDialogWithTitle(
-        STD_DIALOGS.outdated.title,
-        STD_DIALOGS.outdated.text,
-      );
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-027 Step 2 Detail view setelah Update ditolak"),
-      );
+    await areaPage.trySave();
+    await areaPage.expectDialogWithTitle(STD_DIALOGS.outdated.title, STD_DIALOGS.outdated.text);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-027 Step 2 Detail view setelah Update ditolak"));
 
-      await areaPage.confirmDialog("Reload");
-      await areaPage.expectFormStillOpen(); // stays in edit mode
-      await areaPage.expectFormValues({ division: "SMT", remark: "" }); // latest data, own change dropped
+    await areaPage.confirmDialog("Reload");
+    await areaPage.expectFormStillOpen(); // stays in edit mode
+    await areaPage.expectFormValues({ division: "SMT", remark: "" }); // latest data, own change dropped
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-027 Step 3 Detail view"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-027 Step 3 Detail view"));
+  });
 
   // ---------- 9.5 Delete ----------
 
-  test(
-    "TC-MOM98-032 Delete unused areas from the list",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      partial(
-        "Step 4 (Custom Filter Active = No) not automated: no BasePage filter function yet.",
-      );
-      const id = uid();
-      const names = [`TEMP ${id}`, `TEMP 2 ${id}`];
-      const factory = factoryCode();
-      for (const name of names) await createArea({ factory, name });
+  test("TC-MOM98-032 Delete unused areas from the list", { tag: ["@positive", "@TC-MOM98-032"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    partial("Step 4 (Custom Filter Active = No) not automated: no BasePage filter function yet.");
+    const sets = ["DS-MOM98-17", "DS-MOM98-18"];
 
-      await areaPage.open();
-      await areaPage.delete(names); // checks "Delete 2 Records?"
-      untrack(...names);
+    await areaPage.open();
+    await areaPage.delete(sets.map((ds) => area(data, ds).name)); // checks "Delete 2 Records?"
+    for (const ds of sets) data.removedByTest(ds);
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-032 List view setelah Delete"),
-      );
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-032 List view setelah Delete"));
+  });
 
-  test(
-    "TC-MOM98-033 Delete an unused area from the area page",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const name = `TEMP 3 ${uid()}`;
-      await createArea({ factory: factoryCode(), name });
+  test("TC-MOM98-033 Delete an unused area from the area page", { tag: ["@positive", "@TC-MOM98-033"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    await areaPage.deleteFromDetail(area(data, "DS-MOM98-17").name); // checks "Delete 1 Record?"
+    data.removedByTest("DS-MOM98-17");
 
-      await areaPage.deleteFromDetail(name); // checks "Delete 1 Record?"
-      untrack(name);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-033 List view setelah Delete"));
+  });
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-033 List view setelah Delete"),
-      );
-    },
-  );
+  test("TC-MOM98-034 Cancel the delete confirmation", { tag: ["@positive", "@TC-MOM98-034"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    await areaPage.open();
+    await areaPage.cancelDelete([area(data, "DS-MOM98-17").name]); // checks "Delete 1 Record?"
 
-  test(
-    "TC-MOM98-034 Cancel the delete confirmation",
-    POSITIVE,
-    async ({ page }, testInfo) => {
-      const name = `TEMP 4 ${uid()}`;
-      await createArea({ factory: factoryCode(), name });
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-034 List view setelah Cancel Delete"));
+  });
 
-      await areaPage.open();
-      await areaPage.cancelDelete([name]); // checks "Delete 1 Record?"
+  test("TC-MOM98-035 Delete is all-or-none when some areas are in use", { tag: ["@negative", "@TC-MOM98-035"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    partial("Area used by a digi tag is not covered: Digi Tag Masters has no Page Object. Only a storage location (DS-MOM98-19) is used as the child record.");
+    const used = area(data, "DS-MOM98-04").name; // used by storage location DS-MOM98-19
+    const free = area(data, "DS-MOM98-17").name;
 
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-034 List view setelah Cancel Delete"),
-      );
-    },
-  );
+    await areaPage.open();
+    await areaPage.tryDelete([used, free]);
+    // Standard toast, not the FR-80 text: it does not name the areas in use.
+    await areaPage.expectToast(STD_MESSAGES.deleteInUse);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-035 List view setelah Delete ditolak")); // right after the toast
 
-  test(
-    "TC-MOM98-035 Delete is all-or-none when some areas are in use",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      partial(
-        "Area used by a digi tag is not covered: Digi Tag Masters has no Page Object. Only a storage location is used as the child record.",
-      );
-      const id = uid();
-      const factory = factoryCode();
-      const used = `MAIN STORE ${id}`;
-      const free = `TEMP 5 ${id}`;
-      await createArea({ factory, name: used });
-      await createArea({ factory, name: free });
-      await addStorageLocation(page, used);
+    // The toast names no area: the list proves which areas stayed.
+    await areaPage.open();
+    await areaPage.expectInList(used); // nothing is deleted, the free area too
+    await areaPage.expectInList(free);
 
-      await areaPage.open();
-      await areaPage.tryDelete([used, free]);
-      // Standard toast, not the FR-80 text: it does not name the areas in use.
-      await areaPage.expectToast(STD_MESSAGES.deleteInUse);
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-035 List view setelah Delete ditolak"),
-      ); // right after the toast
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-035 List view"));
+  });
 
-      // The toast names no area: the list proves which areas stayed.
-      await areaPage.open();
-      await areaPage.expectInList(used); // nothing is deleted, the free area too
-      await areaPage.expectInList(free);
+  test("TC-MOM98-037 Delete an area that another user deleted", { tag: ["@negative", "@TC-MOM98-037"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const gone = area(data, "DS-MOM98-17").name;
+    const kept = area(data, "DS-MOM98-18").name;
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-035 List view"));
-    },
-  );
+    await areaPage.open(); // the tester loads the list first
+    await data.remove("DS-MOM98-17", await anotherUser(page)); // user B, by record number
 
-  test(
-    "TC-MOM98-037 Delete an area that another user deleted",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const id = uid();
-      const factory = factoryCode();
-      const gone = `TEMP 6 ${id}`;
-      const kept = `TEMP 7 ${id}`;
-      await createArea({ factory, name: gone });
-      await createArea({ factory, name: kept });
+    await areaPage.tryDelete([gone, kept]);
+    await areaPage.expectMessage(AM_MESSAGES.areasNoLongerExist([gone]));
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-037 List view setelah Delete ditolak"));
 
-      await areaPage.open(); // the tester loads the list first
+    await areaPage.open();
+    await areaPage.expectInList(kept); // nothing is deleted
 
-      const other = new AreaMastersPage(await anotherUser(page));
-      await other.open();
-      await other.delete([gone]);
-      untrack(gone);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-037 List view"));
+  });
 
-      await areaPage.tryDelete([gone, kept]);
-      await areaPage.expectMessage(AM_MESSAGES.areasNoLongerExist([gone]));
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-037 List view setelah Delete ditolak"),
-      );
+  test("TC-MOM98-038 Delete fails on a database error", { tag: ["@negative", "@TC-MOM98-038"], annotation: { type: "tc-version", description: "1" } }, async ({ page, data }, testInfo) => {
+    const names = ["DS-MOM98-17", "DS-MOM98-18"].map((ds) => area(data, ds).name);
 
-      await areaPage.open();
-      await areaPage.expectInList(kept); // nothing is deleted
+    await areaPage.open();
+    // Delete may be sent as DELETE or as POST (several ids): fail both.
+    const stop = await failApi(page, AM_API, ["DELETE", "POST"]);
+    await areaPage.tryDelete(names);
+    await areaPage.expectMessage(AM_MESSAGES.saveFailed);
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-038 List view setelah Delete gagal"));
 
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-037 List view"));
-    },
-  );
+    await stop();
+    await areaPage.open();
+    for (const name of names) await areaPage.expectInList(name); // nothing is deleted
 
-  test(
-    "TC-MOM98-038 Delete fails on a database error",
-    NEGATIVE,
-    async ({ page }, testInfo) => {
-      const id = uid();
-      const factory = factoryCode();
-      const names = [`TEMP 8 ${id}`, `TEMP 9 ${id}`];
-      for (const name of names) await createArea({ factory, name });
-
-      await areaPage.open();
-      // Delete may be sent as DELETE or as POST (several ids): fail both.
-      const stop = await failApi(page, AM_API, ["DELETE", "POST"]);
-      await areaPage.tryDelete(names);
-      await areaPage.expectMessage(AM_MESSAGES.saveFailed);
-      await attachScreenshot(
-        page,
-        testInfo,
-        shot("TC-MOM98-038 List view setelah Delete gagal"),
-      );
-
-      await stop();
-      await areaPage.open();
-      for (const name of names) await areaPage.expectInList(name); // nothing is deleted
-
-      await attachScreenshot(page, testInfo, shot("TC-MOM98-038 List view"));
-    },
-  );
+    await attachScreenshot(page, testInfo, shot("TC-MOM98-038 List view"));
+  });
 });

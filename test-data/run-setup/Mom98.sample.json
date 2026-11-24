@@ -1,0 +1,575 @@
+{
+  "_comment": "SAMPLE for MOM-98 Area Masters, filled from test-data/data-sets/MOM-98 Area Masters - Data Set.md. One unique code per test case. Cleanup deletes the data after each test (dataMode delete), so the file can be run again; if a cleanup failed, delete the records in its snapshot note or change the codes. Remove when TCMS GET /api/test-data is available.",
+  "runId": "LOCAL-MOM98-0001",
+  "environment": "qa",
+  "browser": "chromium",
+  "dataMode": "delete",
+  "dataSets": {
+    "DS-MOM98-01": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-02": {
+      "menu": "Area Masters",
+      "role": "input"
+    },
+    "DS-MOM98-03": {
+      "menu": "Area Masters",
+      "role": "input"
+    },
+    "DS-MOM98-04": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-05": {
+      "menu": "Area Masters",
+      "role": "input",
+      "dependsOn": {
+        "DS-MOM98-04": "Factory"
+      }
+    },
+    "DS-MOM98-06": {
+      "menu": "Area Masters",
+      "role": "input"
+    },
+    "DS-MOM98-07": {
+      "menu": "Area Masters",
+      "role": "input",
+      "dependsOn": {
+        "DS-MOM98-04": "Name"
+      }
+    },
+    "DS-MOM98-08": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-09": {
+      "menu": "Area Masters",
+      "role": "input"
+    },
+    "DS-MOM98-10": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ],
+      "dependsOn": {
+        "DS-MOM98-08": "Name"
+      }
+    },
+    "DS-MOM98-11": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-12": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-13": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-14": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-15": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-16": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-17": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-18": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Name"
+      ]
+    },
+    "DS-MOM98-19": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "active",
+      "identityKey": [
+        "Factory",
+        "Area",
+        "Name"
+      ],
+      "dependsOn": {
+        "DS-MOM98-04": "Area"
+      }
+    }
+  },
+  "testCases": {
+    "TC-MOM98-001": {
+      "version": 1,
+      "data": {}
+    },
+    "TC-MOM98-004": {
+      "version": 1,
+      "data": {}
+    },
+    "TC-MOM98-005": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-01": {
+          "source": "dummy",
+          "values": {
+            "Factory": "F3L25YJ",
+            "Name": "PROD LINE 1 3L25YJ",
+            "Floor": "1",
+            "Division": "SMT",
+            "Description": "Line 1",
+            "Remark": "Main line"
+          }
+        }
+      }
+    },
+    "TC-MOM98-007": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-01": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FY6FJ2O",
+            "Name": "PROD LINE 1 Y6FJ2O",
+            "Floor": "1",
+            "Division": "SMT",
+            "Description": "Line 1",
+            "Remark": "Main line"
+          }
+        }
+      }
+    },
+    "TC-MOM98-008": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-02": {
+          "source": "input",
+          "values": {
+            "Factory": "FL3TWVO",
+            "Name": "PROD LINE 2 L3TWVO",
+            "Floor": "16#5",
+            "Division": "SMT",
+            "Description": "Line 2 floor",
+            "Remark": "New"
+          }
+        }
+      }
+    },
+    "TC-MOM98-009": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-03": {
+          "source": "input",
+          "values": {
+            "Factory": "FY35PAY",
+            "Name": "QC 2 Y35PAY"
+          }
+        }
+      }
+    },
+    "TC-MOM98-010": {
+      "version": 1,
+      "data": {}
+    },
+    "QA-MOM98-010a": {
+      "version": 1,
+      "data": {}
+    },
+    "QA-MOM98-010b": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-03": {
+          "source": "input",
+          "values": {
+            "Factory": "FJZW0TQ",
+            "Name": "QC 2 JZW0TQ"
+          }
+        }
+      }
+    },
+    "QA-MOM98-010c": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-03": {
+          "source": "input",
+          "values": {
+            "Factory": "F5QK1QY",
+            "Name": "QC 2 5QK1QY"
+          }
+        }
+      }
+    },
+    "TC-MOM98-013": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-03": {
+          "source": "input",
+          "values": {
+            "Factory": "FDH3LTH",
+            "Name": "QC 2 DH3LTH"
+          }
+        }
+      }
+    },
+    "TC-MOM98-014": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-04": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FJ57L8F",
+            "Name": "MAIN STORE J57L8F"
+          }
+        },
+        "DS-MOM98-05": {
+          "source": "input",
+          "values": {
+            "Factory": "FJ57L8F",
+            "Name": "QC 5 J57L8F"
+          }
+        }
+      }
+    },
+    "TC-MOM98-015": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-06": {
+          "source": "input",
+          "values": {
+            "Factory": "fDJQ6P7",
+            "Name": "QC 9 DJQ6P7"
+          }
+        }
+      }
+    },
+    "TC-MOM98-016": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-04": {
+          "source": "dummy",
+          "values": {
+            "Factory": "F2WTI11",
+            "Name": "MAIN STORE 2WTI11"
+          }
+        }
+      }
+    },
+    "TC-MOM98-018": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-04": {
+          "source": "dummy",
+          "values": {
+            "Factory": "F4EWQR6",
+            "Name": "MAIN STORE 4EWQR6"
+          }
+        },
+        "DS-MOM98-07": {
+          "source": "input",
+          "values": {
+            "Factory": "G4EWQR6",
+            "Name": "MAIN STORE 4EWQR6"
+          }
+        }
+      }
+    },
+    "TC-MOM98-019": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-03": {
+          "source": "input",
+          "values": {
+            "Factory": "FQE8B1H",
+            "Name": "QC 2 QE8B1H"
+          }
+        }
+      }
+    },
+    "TC-MOM98-020": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-08": {
+          "source": "dummy",
+          "values": {
+            "Factory": "F2CTGI7",
+            "Name": "QC 2CTGI7"
+          }
+        },
+        "DS-MOM98-09": {
+          "source": "input",
+          "values": {
+            "Name": "QC AREA 2CTGI7",
+            "Division": "QA"
+          }
+        }
+      }
+    },
+    "TC-MOM98-021": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-04": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FMQR03T",
+            "Name": "MAIN STORE MQR03T"
+          }
+        }
+      }
+    },
+    "TC-MOM98-022": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-11": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FSYRRFP",
+            "Name": "Main Store SYRRFP"
+          }
+        }
+      }
+    },
+    "TC-MOM98-023": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-08": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FAA4YCK",
+            "Name": "QC AA4YCK"
+          }
+        },
+        "DS-MOM98-10": {
+          "source": "dummy",
+          "values": {
+            "Factory": "GAA4YCK",
+            "Name": "QC AA4YCK"
+          }
+        }
+      }
+    },
+    "TC-MOM98-024": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-12": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FHRVAAE",
+            "Name": "QC 6 HRVAAE"
+          }
+        },
+        "DS-MOM98-13": {
+          "source": "dummy",
+          "values": {
+            "Factory": "GHRVAAE",
+            "Name": "MAIN STORE G HRVAAE"
+          }
+        }
+      }
+    },
+    "TC-MOM98-025": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-14": {
+          "source": "dummy",
+          "values": {
+            "Factory": "fVLQI5E",
+            "Name": "QC 7 VLQI5E"
+          }
+        }
+      }
+    },
+    "TC-MOM98-026": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-15": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FPWHX4A",
+            "Name": "QC 8 PWHX4A"
+          }
+        }
+      }
+    },
+    "TC-MOM98-027": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-16": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FYMR3VF",
+            "Name": "QC 10 YMR3VF"
+          }
+        }
+      }
+    },
+    "TC-MOM98-032": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FDRU20Z",
+            "Name": "TEMP DRU20Z"
+          }
+        },
+        "DS-MOM98-18": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FDRU20Z",
+            "Name": "TEMP 2 DRU20Z"
+          }
+        }
+      }
+    },
+    "TC-MOM98-033": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FNOKALE",
+            "Name": "TEMP NOKALE"
+          }
+        }
+      }
+    },
+    "TC-MOM98-034": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FMVCPCC",
+            "Name": "TEMP MVCPCC"
+          }
+        }
+      }
+    },
+    "TC-MOM98-035": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-04": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FAJOEGR",
+            "Name": "MAIN STORE AJOEGR"
+          }
+        },
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FAJOEGR",
+            "Name": "TEMP AJOEGR"
+          }
+        },
+        "DS-MOM98-19": {
+          "source": "dummy",
+          "values": {
+            "Area": "MAIN STORE AJOEGR",
+            "Name": "SLOC AJOEGR"
+          }
+        }
+      }
+    },
+    "TC-MOM98-037": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FP8C55V",
+            "Name": "TEMP P8C55V"
+          }
+        },
+        "DS-MOM98-18": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FP8C55V",
+            "Name": "TEMP 2 P8C55V"
+          }
+        }
+      }
+    },
+    "TC-MOM98-038": {
+      "version": 1,
+      "data": {
+        "DS-MOM98-17": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FW9M61A",
+            "Name": "TEMP W9M61A"
+          }
+        },
+        "DS-MOM98-18": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FW9M61A",
+            "Name": "TEMP 2 W9M61A"
+          }
+        }
+      }
+    }
+  }
+}

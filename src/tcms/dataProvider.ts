@@ -173,17 +173,43 @@ export class DataProvider {
     const adapter = this.adapter(ds);
     const values = rec.sent as FieldValues;
     this.say(`setup: create ${ds} in ${adapter.menu} ${JSON.stringify(values)}`);
+    const where = new RecordPage(this.page, adapter.path);
     try {
       await adapter.create(this.page, values);
-      rec.recordNo = new RecordPage(this.page, adapter.path).recordNoFromUrl();
+      this.own(ds, where.recordNoFromUrl(), values);
     } catch (e) {
+      // The save may have gone through before the step that failed (e.g. the H6 check timed
+      // out on the new detail view). When the detail URL of this menu is open, the record
+      // exists: own it, so cleanup deletes it and the same values can be used again.
+      const recordNo = this.tryRecordNo(where);
+      if (recordNo) {
+        this.own(ds, recordNo, values);
+        this.say(`setup: ${ds} create step failed, but record ${recordNo} was saved: kept for cleanup`);
+      } else {
+        rec.note = `Create failed; if the record was saved anyway, delete ${adapter.menu} ${JSON.stringify(values)} by hand.`;
+      }
       throw new SetupError(`${ds}: ${adapter.menu} create failed. ${(e as Error).message.split("\n")[0]}`);
     }
+    this.say(`setup: ${ds} created as record ${rec.recordNo}`);
+  }
+
+  /** Record number of the open page, or undefined when it is not a detail view of this menu. */
+  private tryRecordNo(where: RecordPage): string | undefined {
+    try {
+      return where.recordNoFromUrl();
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Mark a record created by this run: cleanup deletes it by its record number. */
+  private own(ds: string, recordNo: string, values: FieldValues) {
+    const rec = this.state(ds);
+    rec.recordNo = recordNo;
     rec.owned = true;
     rec.state = "active";
     rec.values = { ...values };
-    this.createdOrder.push(ds);
-    this.say(`setup: ${ds} created as record ${rec.recordNo}`);
+    if (!this.createdOrder.includes(ds)) this.createdOrder.push(ds);
   }
 
   /** FR-210: exactly one record with the identity key, in the state of Section 9.1. */

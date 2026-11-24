@@ -93,7 +93,7 @@ export default class TcmsReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult) {
-    const tcId = test.tags.find((t) => /^@TC-/.test(t))?.slice(1);
+    const tcId = test.tags.find((t) => /^@(TC|QA)-/.test(t))?.slice(1);
     if (!tcId) return;
     const ann = (type: string) => test.annotations.find((a) => a.type === type)?.description;
     // Annotations pushed during the run are on result.annotations (Playwright >= 1.52) or test.annotations.
@@ -105,7 +105,10 @@ export default class TcmsReporter implements Reporter {
     const prepared = runAnn("tcms-prepared") === "ok";
     const notInRun = runAnn("tcms-not-in-run") !== undefined;
     const errorText = firstLine(result.error?.message);
-    const setupError = (result.errors ?? []).some((e) => e.message?.includes(SETUP_ERROR_MARK));
+    // A timed-out setup leaves no annotation: Playwright stops the fixture before its catch runs.
+    const setupTimeout = (result.errors ?? []).some((e) => /Fixture "data" timeout .* during setup/.test(e.message ?? ""));
+    const setupError =
+      setupTimeout || (result.errors ?? []).some((e) => e.message?.includes(SETUP_ERROR_MARK));
     const setupFailed = setupAnn?.startsWith("failed") || (!setupAnn && setupError);
     const isPrepare = runAnn("tcms-data-mode") === "prepare";
 
