@@ -1,0 +1,429 @@
+{
+  "_comment": "SAMPLE, filled by hand from MOM-99 Section 9.1. Replace every unique code (7K2Q9A, 8M3P1C, ...) with new ones before each run, or make sure the previous run cleaned up. Remove when TCMS GET /api/test-data is available.",
+  "runId": "LOCAL-0001",
+  "environment": "qa",
+  "browser": "chromium",
+  "dataMode": "delete",
+  "dataSets": {
+    "DS-MOM99-01": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Name"]
+    },
+    "DS-MOM99-02": {
+      "menu": "Area Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Name"]
+    },
+    "DS-MOM99-04": {
+      "menu": "Process Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Name"]
+    },
+    "DS-MOM99-05": {
+      "menu": "Process Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Name"]
+    },
+    "DS-MOM99-06": {
+      "menu": "Process Masters",
+      "role": "setup",
+      "state": "inactive",
+      "identityKey": ["Name"]
+    },
+    "DS-MOM99-07": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Area", "Name"],
+      "dependsOn": {
+        "DS-MOM99-01": "Area"
+      }
+    },
+    "DS-MOM99-08": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Area", "Name"],
+      "dependsOn": {
+        "DS-MOM99-02": "Area"
+      }
+    },
+    "DS-MOM99-09": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Area", "Name"],
+      "dependsOn": {
+        "DS-MOM99-02": "Area"
+      }
+    },
+    "DS-MOM99-10": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Factory", "Area", "Name"],
+      "dependsOn": {
+        "DS-MOM99-02": "Area"
+      }
+    },
+    "DS-MOM99-11": {
+      "menu": "Storage Locations",
+      "role": "setup",
+      "state": "inactive",
+      "identityKey": ["Factory", "Area", "Name"],
+      "dependsOn": {
+        "DS-MOM99-01": "Area"
+      }
+    },
+    "DS-MOM99-14": {
+      "menu": "Production Line Masters",
+      "role": "setup",
+      "state": "active",
+      "identityKey": ["Code"],
+      "dependsOn": {
+        "DS-MOM99-04": "Process Master",
+        "DS-MOM99-07": "Storage Location",
+        "DS-MOM99-09": "Repair Storage Location"
+      }
+    },
+    "DS-MOM99-15": {
+      "menu": "Production Line Masters",
+      "role": "setup",
+      "state": "inactive",
+      "identityKey": ["Code"],
+      "dependsOn": {
+        "DS-MOM99-04": "Process Master",
+        "DS-MOM99-08": "Storage Location"
+      }
+    },
+    "DS-MOM99-29": {
+      "menu": "Production Line Masters",
+      "role": "input",
+      "dependsOn": {
+        "DS-MOM99-04": "Process Master",
+        "DS-MOM99-08": "Storage Location",
+        "DS-MOM99-09": "Repair Storage Location"
+      }
+    }
+  },
+  "testCases": {
+    "TC-MOM99-001": {
+      "version": 1,
+      "data": {
+        "DS-MOM99-04": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM 7K2Q9A",
+            "Description": "Main process"
+          }
+        },
+        "DS-MOM99-01": {
+          "source": "dummy",
+          "values": {
+            "Factory": "F7K2Q9A",
+            "Name": "AREA A 7K2Q9A",
+            "Floor": "1",
+            "Division": "SMT"
+          }
+        },
+        "DS-MOM99-07": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA A 7K2Q9A",
+            "Name": "LINE1 SLOC 7K2Q9A"
+          }
+        },
+        "DS-MOM99-02": {
+          "source": "dummy",
+          "values": {
+            "Factory": "G7K2Q9A",
+            "Name": "AREA B 7K2Q9A",
+            "Floor": "2",
+            "Division": "ASSY"
+          }
+        },
+        "DS-MOM99-09": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B 7K2Q9A",
+            "Name": "REPAIR1 SLOC 7K2Q9A"
+          }
+        },
+        "DS-MOM99-14": {
+          "source": "dummy",
+          "values": {
+            "Code": "PL-7K2Q9A",
+            "Name": "SMT 7K2Q9A",
+            "Line No": "L7K2Q9A",
+            "Process Master": "PM 7K2Q9A",
+            "Storage Location": "LINE1 SLOC 7K2Q9A",
+            "Repair Storage Location": "REPAIR1 SLOC 7K2Q9A",
+            "External Code": "EXT-7K2Q9A",
+            "Production Line": "Yes",
+            "Two Step Transfer": "Yes",
+            "Auto Transfer to Repair": "No"
+          }
+        },
+        "DS-MOM99-08": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B 7K2Q9A",
+            "Name": "LINE2 SLOC 7K2Q9A"
+          }
+        },
+        "DS-MOM99-15": {
+          "source": "dummy",
+          "values": {
+            "Code": "PLOFF-7K2Q9A",
+            "Name": "OFF 7K2Q9A",
+            "Line No": "O7K2Q9A",
+            "Process Master": "PM 7K2Q9A",
+            "Storage Location": "LINE2 SLOC 7K2Q9A"
+          }
+        }
+      }
+    },
+    "TC-MOM99-007": {
+      "version": 1,
+      "data": {
+        "DS-MOM99-04": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM 8M3P1C",
+            "Description": "Main process"
+          }
+        },
+        "DS-MOM99-02": {
+          "source": "dummy",
+          "values": {
+            "Factory": "G8M3P1C",
+            "Name": "AREA B 8M3P1C",
+            "Floor": "2",
+            "Division": "ASSY"
+          }
+        },
+        "DS-MOM99-08": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B 8M3P1C",
+            "Name": "LINE2 SLOC 8M3P1C"
+          }
+        },
+        "DS-MOM99-09": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B 8M3P1C",
+            "Name": "REPAIR1 SLOC 8M3P1C"
+          }
+        },
+        "DS-MOM99-29": {
+          "source": "input",
+          "values": {
+            "Code": "PLN-8M3P1C",
+            "Name": "SMT N 8M3P1C",
+            "Line No": "N8M3P1C",
+            "Process Master": "PM 8M3P1C",
+            "Storage Location": "LINE2 SLOC 8M3P1C",
+            "Repair Storage Location": "REPAIR1 SLOC 8M3P1C",
+            "External Code": "EXTN-8M3P1C"
+          }
+        }
+      }
+    },
+    "TC-MOM99-014": {
+      "version": 1,
+      "data": {
+        "DS-MOM99-04": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM Q4T6W2",
+            "Description": "Main process"
+          }
+        },
+        "DS-MOM99-01": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FQ4T6W2",
+            "Name": "AREA A Q4T6W2",
+            "Floor": "1",
+            "Division": "SMT"
+          }
+        },
+        "DS-MOM99-07": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA A Q4T6W2",
+            "Name": "LINE1 SLOC Q4T6W2"
+          }
+        },
+        "DS-MOM99-02": {
+          "source": "dummy",
+          "values": {
+            "Factory": "GQ4T6W2",
+            "Name": "AREA B Q4T6W2",
+            "Floor": "2",
+            "Division": "ASSY"
+          }
+        },
+        "DS-MOM99-09": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B Q4T6W2",
+            "Name": "REPAIR1 SLOC Q4T6W2"
+          }
+        },
+        "DS-MOM99-14": {
+          "source": "dummy",
+          "values": {
+            "Code": "PL-Q4T6W2",
+            "Name": "SMT Q4T6W2",
+            "Line No": "LQ4T6W2",
+            "Process Master": "PM Q4T6W2",
+            "Storage Location": "LINE1 SLOC Q4T6W2",
+            "Repair Storage Location": "REPAIR1 SLOC Q4T6W2",
+            "External Code": "EXT-Q4T6W2",
+            "Production Line": "Yes",
+            "Two Step Transfer": "No",
+            "Auto Transfer to Repair": "No"
+          }
+        },
+        "DS-MOM99-08": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B Q4T6W2",
+            "Name": "LINE2 SLOC Q4T6W2"
+          }
+        },
+        "DS-MOM99-15": {
+          "source": "dummy",
+          "values": {
+            "Code": "PLOFF-Q4T6W2",
+            "Name": "OFF Q4T6W2",
+            "Line No": "OQ4T6W2",
+            "Process Master": "PM Q4T6W2",
+            "Storage Location": "LINE2 SLOC Q4T6W2"
+          }
+        },
+        "DS-MOM99-29": {
+          "source": "input",
+          "values": {
+            "Code": "PLN-Q4T6W2",
+            "Name": "SMT N Q4T6W2",
+            "Line No": "NQ4T6W2",
+            "Process Master": "PM Q4T6W2",
+            "Storage Location": "LINE2 SLOC Q4T6W2",
+            "Repair Storage Location": "REPAIR1 SLOC Q4T6W2",
+            "External Code": "EXTN-Q4T6W2"
+          }
+        }
+      }
+    },
+    "TC-MOM99-017": {
+      "version": 1,
+      "data": {
+        "DS-MOM99-04": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM Z9B3K7",
+            "Description": "Main process"
+          }
+        },
+        "DS-MOM99-06": {
+          "source": "dummy",
+          "values": {
+            "Name": "OLDPM Z9B3K7"
+          }
+        },
+        "DS-MOM99-01": {
+          "source": "dummy",
+          "values": {
+            "Factory": "FZ9B3K7",
+            "Name": "AREA A Z9B3K7",
+            "Floor": "1",
+            "Division": "SMT"
+          }
+        },
+        "DS-MOM99-07": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA A Z9B3K7",
+            "Name": "LINE1 SLOC Z9B3K7"
+          }
+        },
+        "DS-MOM99-11": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA A Z9B3K7",
+            "Name": "OLDSLOC1 Z9B3K7"
+          }
+        }
+      }
+    },
+    "TC-MOM99-018": {
+      "version": 1,
+      "data": {
+        "DS-MOM99-04": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM R5N8D1",
+            "Description": "Main process"
+          }
+        },
+        "DS-MOM99-02": {
+          "source": "dummy",
+          "values": {
+            "Factory": "GR5N8D1",
+            "Name": "AREA B R5N8D1",
+            "Floor": "2",
+            "Division": "ASSY"
+          }
+        },
+        "DS-MOM99-08": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B R5N8D1",
+            "Name": "LINE2 SLOC R5N8D1"
+          }
+        },
+        "DS-MOM99-09": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B R5N8D1",
+            "Name": "REPAIR1 SLOC R5N8D1"
+          }
+        },
+        "DS-MOM99-29": {
+          "source": "input",
+          "values": {
+            "Code": "PLN-R5N8D1",
+            "Name": "SMT N R5N8D1",
+            "Line No": "NR5N8D1",
+            "Process Master": "PM R5N8D1",
+            "Storage Location": "LINE2 SLOC R5N8D1",
+            "Repair Storage Location": "REPAIR1 SLOC R5N8D1",
+            "External Code": "EXTN-R5N8D1"
+          }
+        },
+        "DS-MOM99-05": {
+          "source": "dummy",
+          "values": {
+            "Name": "PM2 R5N8D1",
+            "Description": "Spare process"
+          }
+        },
+        "DS-MOM99-10": {
+          "source": "dummy",
+          "values": {
+            "Area": "AREA B R5N8D1",
+            "Name": "REPAIR2 SLOC R5N8D1"
+          }
+        }
+      }
+    }
+  }
+}

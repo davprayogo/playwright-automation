@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import dotenv from "dotenv";
+import "dotenv/config";
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL || "https://lumina.dev.ops.satnusa.com",
     channel: process.env.BROWSER_CHANNEL || undefined,
-    headless: true,
+    headless: false,
     screenshot: "only-on-failure", //{ mode: "on", fullPage: true }, untuk ss semua testing setelah selesai
     video: "off", //'retain-on-failure'
     trace: "on", //retain-on-failur untuk on faill aja kalau on untuk semuanya

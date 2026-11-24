@@ -12,8 +12,11 @@
     "paths": {
       "@pages/*": ["pages/*"],
       "@fixtures/*": ["fixtures/*"],
-      "@utils/*": ["utils/*"],
-      "@data/*": ["data/*"]
+      "@utils/*": ["src/utils/*"],
+      "@data/*": ["data/*"],
+      "@core/*":["src/core/*"],
+      "@menus/*":["src/menus/*"],
+      "@tcms/*":["src/tcms/*"]
     }
   },
   "include": ["**/*.ts"],
