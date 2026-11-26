@@ -6,7 +6,10 @@ import type {
   ProductionLineMaster,
 } from "./production-line-master.data";
 
-/** List columns — FSD MOM-99 Section 7.5, List View (Checkbox excluded). */
+/**
+ * Columns shown by default — FSD MOM-99 Section 7.5.1, List View (Checkbox excluded).
+ * Revision: Production Line is shown, External Code is hidden by default.
+ */
 export const PLM_LIST_COLUMNS = [
   "Code",
   "Name",
@@ -18,16 +21,22 @@ export const PLM_LIST_COLUMNS = [
   "Division",
   "Repair Storage Location",
   "Process Master",
-  "External Code",
+  "Production Line",
   "Two Step Transfer",
   "Auto Transfer to Repair",
   "Active",
 ] as const;
 
-export type PlmListColumn = (typeof PLM_LIST_COLUMNS)[number];
+/** Columns hidden by default (the user can show them). */
+export const PLM_HIDDEN_COLUMNS = ["External Code"] as const;
 
-/** Yes/No list columns: an icon (Two Step Transfer, Auto Transfer to Repair) or the Active badge. */
+export type PlmListColumn =
+  | (typeof PLM_LIST_COLUMNS)[number]
+  | (typeof PLM_HIDDEN_COLUMNS)[number];
+
+/** Yes/No list columns: an icon (Production Line, Two Step Transfer, Auto Transfer to Repair) or the Active badge. */
 type PlmBooleanColumn =
+  | "Production Line"
   | "Two Step Transfer"
   | "Auto Transfer to Repair"
   | "Active";
@@ -92,28 +101,31 @@ const DETAIL_FIELDS: DetailFieldMap<ProductionLineDetail> = {
   labels: DETAIL_LABELS,
 };
 
-type ReferenceField =
-  | "processMaster"
-  | "storageLocation"
-  | "repairStorageLocation";
+type ReferenceField = "processMaster" | "storageLocation" | "repairStorageLocation";
 
 /** Text and reference fields of the form (toggles excluded). */
 export type PlmTextOrRefField = TextField;
 
-/** MOM-99 business-rule messages (FSD Section 7.3 / 8.3). Generic checks use STD_MESSAGES. */
+/** Maximum length of each text field (FSD Section 7.5.2). */
+export const PLM_MAX_LENGTH = {
+  code: 50,
+  name: 100,
+  lineNo: 10,
+  externalCode: 100,
+} as const;
+
+/**
+ * MOM-99 business-rule messages (FSD rev. Section 7.3 / 8.3). Generic checks use STD_MESSAGES:
+ *  - Auto Transfer to Repair Yes without a repair storage location (FR-130): STD_MESSAGES.required
+ *    under Repair Storage Location.
+ *  - Delete of a line another user deleted (FR-160): STD_DIALOGS.deleted (modal).
+ */
 export const PLM_MESSAGES = {
-  repairSameAsStorage: (storageLocation: string) =>
-    `Repair Storage Location must be different from Storage Location ${storageLocation}. Please select another storage location.`,
-  autoTransferNeedsRepair:
-    "Auto Transfer to Repair needs a Repair Storage Location. Please select a repair storage location or set Auto Transfer to Repair to No.",
-  saveFailed:
-    "The change could not be saved. Please try again or contact IT support.",
-  listLoadFailed:
-    "Production lines could not be loaded. Please refresh the page or contact IT support.",
-  detailLoadFailed:
-    "This production line could not be loaded. Please refresh the page or contact IT support.",
-  linesNoLongerExist: (codes: string[]) =>
-    `These production lines no longer exist: ${codes.join(", ")}. Please refresh the page.`,
+  /** FR-90, inline under Repair Storage Location. */
+  repairSameAsStorage: "Must be different from Storage Location",
+  saveFailed: "The change could not be saved. Please try again or contact IT support.",
+  listLoadFailed: "Production lines could not be loaded. Please refresh the page or contact IT support.",
+  detailLoadFailed: "This production line could not be loaded. Please refresh the page or contact IT support.",
 } as const;
 
 export class ProductionLineMastersPage extends BasePage {
@@ -132,29 +144,27 @@ export class ProductionLineMastersPage extends BasePage {
     code: "pl-code",
     name: "pl-name",
     lineNo: "pl-line-no",
-    processMaster: "pl-master-process",
+    processMaster: "pl-process-master",
     storageLocation: "pl-storage-location",
     repairStorageLocation: "pl-repair-storage-location",
     externalCode: "pl-external-code",
   };
   private input = (field: PlmTextOrRefField) =>
-    this.page.getByTestId(
-      `${ProductionLineMastersPage.FIELD_IDS[field]}-input`,
-    );
+    this.page.getByTestId(`${ProductionLineMastersPage.FIELD_IDS[field]}-input`);
   private inputCode = () => this.input("code");
   private inputName = () => this.input("name");
   private inputLineNo = () => this.input("lineNo");
   private inputProcessMaster = () => this.input("processMaster");
   private inputStorageLocation = () => this.input("storageLocation");
-  private inputRepairStorageLocation = () =>
-    this.input("repairStorageLocation");
+  private inputRepairStorageLocation = () => this.input("repairStorageLocation");
   private inputExternalCode = () => this.input("externalCode");
 
   /**
    * <td data-col-key> of the Yes/No list columns. Confirmed in the UI: isTwoStepTransfer
-   * (and isProductionLine). isAutoRepairTransfer and isActive follow the same pattern.
+   * and isProductionLine. isAutoRepairTransfer and isActive follow the same pattern.
    */
   protected override readonly listColumnKeys = {
+    "Production Line": "isProductionLine",
     "Two Step Transfer": "isTwoStepTransfer",
     "Auto Transfer to Repair": "isAutoRepairTransfer",
     Active: "isActive",
@@ -189,7 +199,7 @@ export class ProductionLineMastersPage extends BasePage {
 
   /**
    * Open New and fill the form, without saving.
-   * typeText: type the text fields key by key, so the input's max length applies.
+   * typeText: type the text fields key by key, as a user does.
    */
   async startCreate(
     data: Partial<ProductionLineMaster>,
@@ -199,7 +209,7 @@ export class ProductionLineMastersPage extends BasePage {
     await this.fillForm(data, opts);
   }
 
-  /** Save the open New form and confirm. */
+  /** Save the open form (New or Edit), confirm, and wait for the line page of `code`. */
   async saveNew(code: string) {
     await this.clickSave();
     await this.confirmDialog("Save");
@@ -237,29 +247,50 @@ export class ProductionLineMastersPage extends BasePage {
     await this.fillForm(data);
   }
 
+  /**
+   * Fill the form that is already open (New, or Edit after clickEdit), without saving.
+   * Use saveNew(code) to save it: it works for New and Edit.
+   */
+  async fill(data: Partial<Omit<ProductionLineMaster, "code">> & { code?: string }) {
+    await this.fillForm(data);
+  }
+
   /** Click Save on a form that is expected to be refused (confirms only if asked). */
   async trySave() {
     await this.clickSaveConfirmIfAsked();
   }
 
   /**
-   * Delete from the list (FR-160). Rows must be selected first.
-   * Checks the standard confirmation "Delete 1 Record?" / "Delete {qty} Records?".
+   * Tick the rows on the open list, click More → Delete, check the standard confirmation
+   * "Delete 1 Record?" / "Delete {qty} Records?" and click Delete. The caller asserts the result.
    */
-  async delete(codes: string[]) {
+  async tryDelete(codes: string[]) {
     await this.selectRowsByColumn("Code", codes);
     await this.clickDelete();
     await this.expectDialogText(deleteConfirmMessage(codes.length));
     await this.confirmDialog("Delete");
+  }
+
+  /** Delete from the list (FR-160): the rows must leave the list. */
+  async delete(codes: string[]) {
+    await this.tryDelete(codes);
     for (const code of codes) await this.expectNotInList(code);
   }
 
-  /** Delete from the line page (FR-160): More → Delete → confirm "Delete 1 Record?". */
-  async deleteFromDetail(code: string) {
+  /**
+   * Open the line, click More → Delete, check "Delete 1 Record?" and click Delete.
+   * The caller asserts the result.
+   */
+  async tryDeleteFromDetail(code: string) {
     await this.openDetail(code);
     await this.clickDetailDelete();
     await this.expectDialogText(deleteConfirmMessage(1));
     await this.confirmDialog("Delete");
+  }
+
+  /** Delete from the line page (FR-160): the line must leave the list. */
+  async deleteFromDetail(code: string) {
+    await this.tryDeleteFromDetail(code);
     await this.open();
     await this.expectNotInList(code);
   }
@@ -283,8 +314,7 @@ export class ProductionLineMastersPage extends BasePage {
     expected: Partial<ProductionLineMaster> & ProductionLineDerived,
   ) {
     const text: Partial<ProductionLineDetail> = { ...expected };
-    for (const key of TOGGLE_KEYS)
-      delete (text as Record<string, unknown>)[key];
+    for (const key of TOGGLE_KEYS) delete (text as Record<string, unknown>)[key];
     await this.expectDetailFields(text, DETAIL_FIELDS);
   }
 
@@ -299,18 +329,50 @@ export class ProductionLineMastersPage extends BasePage {
   /**
    * The row of `code` shows each value in its column (FSD 7.5 List View names).
    * Yes/No columns take a boolean: icon, or the badge for Active.
+   * A hidden column (External Code) can only be checked after the user shows it.
    */
   async expectLine(code: string, values: PlmListValues) {
     await this.expectListValues(code, values);
   }
 
+  /**
+   * Columns hidden by default have no header (FSD 7.5.1).
+   * Candidate for BasePage once a second menu needs it.
+   */
+  async expectColumnsHidden(columns: readonly string[]) {
+    for (const column of columns) await expect(this.listHeader(column)).toHaveCount(0);
+  }
+
+  /**
+   * The rows with these Codes show in this order (default sort Code ascending, FSD 7.5.1).
+   * Other rows between them are ignored. All the codes must be on the loaded page:
+   * with many lines the run's codes may fall on different pages (then the test fails
+   * with the codes found, not with a wrong order).
+   * Candidate for BasePage once a second menu needs it.
+   */
+  async expectCodeOrder(codes: readonly string[]) {
+    const index = await this.listColumnIndex("Code");
+    const shown = await this.clickableRows().evaluateAll(
+      (rows, i) => rows.map((r) => (r.children[i]?.textContent ?? "").trim()),
+      index,
+    );
+    const found = shown.filter((code) => codes.includes(code));
+    expect(found, `Codes on the loaded page, in list order (all shown: ${shown.length})`).toEqual([...codes]);
+  }
+
   /** The same inline error shows under each field. */
   async expectFieldErrors(fields: PlmTextOrRefField[], message: string) {
     for (const field of fields) {
-      await this.expectFieldError(
-        ProductionLineMastersPage.FIELD_IDS[field],
-        message,
-      );
+      await this.expectFieldError(ProductionLineMastersPage.FIELD_IDS[field], message);
+    }
+  }
+
+  /** One inline error per field, each with its own text. */
+  async expectFieldErrorsEach(errors: Partial<Record<PlmTextOrRefField, string>>) {
+    for (const [field, message] of Object.entries(errors) as [PlmTextOrRefField, string | undefined][]) {
+      if (message !== undefined) {
+        await this.expectFieldError(ProductionLineMastersPage.FIELD_IDS[field], message);
+      }
     }
   }
 
@@ -328,7 +390,7 @@ export class ProductionLineMastersPage extends BasePage {
     await this.expectFormToggles(expected);
   }
 
-  /** Text values on the open form (e.g. after typing over the max length). */
+  /** Text values on the open form. */
   async expectFormValues(
     expected: Partial<
       Pick<ProductionLineMaster, "code" | "name" | "lineNo" | "externalCode">

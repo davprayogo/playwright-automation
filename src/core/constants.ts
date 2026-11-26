@@ -40,10 +40,30 @@ export const STD_MESSAGES = {
   /** FR-470, inline under the reference field. */
   inactiveRecord: "The selected record is inactive. Select another one",
   recordNotExist: "The selected record no longer exists. Select another one",
-  /** Toast. Delete refused because other records use the record (confirmed in the UI). */
+  /** Toast. Delete from the record page refused because other records use the record (confirmed in the UI). */
   deleteInUse:
     "This record cannot be deleted because it is already used by other records. If it is no longer needed, set it to inactive instead.",
+  /**
+   * Delete from the LIST refused because other records use one or more selected records
+   * (MOM-99 rev. FR-160). Shown as a toast like deleteInUse: not confirmed in the UI yet.
+   */
+  deleteInUseList:
+    "One or more selected records cannot be deleted because they are already used by other records. If they are no longer needed, set them to inactive instead.",
 } as const;
+
+/** FR-460, inline under a text field over its maximum length, e.g. "Maximum 50 characters (51 entered)". */
+export function maxLengthMessage(max: number, entered: number): string {
+  return `Maximum ${max} characters (${entered} entered)`;
+}
+
+/**
+ * API answer for a text over its maximum length (MOM-99 rev. Section 8.3), e.g.
+ * "The length of Code must be 50 characters or fewer. You entered 51 characters."
+ * For API tests; the UI shows maxLengthMessage() under the field.
+ */
+export function apiMaxLengthMessage(field: string, max: number, entered: number): string {
+  return `The length of ${field} must be ${max} characters or fewer. You entered ${entered} characters.`;
+}
 
 /**
  * Delete confirmation text (standard Lumina, list and detail view):
@@ -89,7 +109,7 @@ export const STD_DIALOGS = {
       "Reload to continue editing with the latest data, or Discard to cancel your changes.",
     ],
   },
-  /** FR-500. */
+  /** FR-500. Also shown when a Delete from the list hits a record another user deleted (MOM-99 rev. FR-160). */
   deleted: {
     title: "Record Deleted",
     text: ["This record was deleted by another user after you opened it. Your changes have not been saved."],
