@@ -113,9 +113,9 @@ export const PLM_MESSAGES = {
   saveFailed:
     "The change could not be saved. Please try again or contact IT support.",
   listLoadFailed:
-    "Production lines could not be loaded. Please refresh the page or contact IT support.",
+    "We couldn't load the data due to a system issue. Please try again.",
   detailLoadFailed:
-    "This production line could not be loaded. Please refresh the page or contact IT support.",
+    "We couldn't load the data due to a system issue. Please try again.",
   linesNoLongerExist: (codes: string[]) =>
     `These production lines no longer exist: ${codes.join(", ")}. Please refresh the page.`,
 } as const;

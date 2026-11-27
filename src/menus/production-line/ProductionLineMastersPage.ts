@@ -119,14 +119,14 @@ export const PLM_MAX_LENGTH = {
  *  - Auto Transfer to Repair Yes without a repair storage location (FR-130): STD_MESSAGES.required
  *    under Repair Storage Location.
  *  - Delete of a line another user deleted (FR-160): STD_DIALOGS.deleted (modal).
+ *  - List or line page fails to load (FR-10, FR-20): LOAD_FAILED_TEXT, BasePage.expectLoadFailed().
  */
 export const PLM_MESSAGES = {
   /** FR-90, inline under Repair Storage Location. */
   repairSameAsStorage: "Must be different from Storage Location",
   saveFailed: "The change could not be saved. Please try again or contact IT support.",
-  listLoadFailed: "Production lines could not be loaded. Please refresh the page or contact IT support.",
-  detailLoadFailed: "This production line could not be loaded. Please refresh the page or contact IT support.",
 } as const;
+// List / line page load failed (FR-10, FR-20): standard text, BasePage.expectLoadFailed().
 
 export class ProductionLineMastersPage extends BasePage {
   /**
@@ -174,7 +174,7 @@ export class ProductionLineMastersPage extends BasePage {
   private static readonly TOGGLE_IDS: Record<keyof PlmToggles, string> = {
     productionLine: "pl-is-production-line",
     twoStepTransfer: "pl-is-two-step-transfer",
-    autoTransferToRepair: "pl-is-auto-transfer-to-repair",
+    autoTransferToRepair: "pl-is-auto-repair-to-transfer",
   };
 
   // ---------- Navigation ----------

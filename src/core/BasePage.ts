@@ -9,6 +9,7 @@ import {
   LIST_ACTIVE_BADGE,
   LIST_ACTIVE_COLUMN,
   LIST_BOOLEAN_ICON,
+  LOAD_FAILED_MESSAGE,
   TABLE_EMPTY_TEXT,
   TABLE_NO_RESULT_TEXT,
   escapeRegExp,
@@ -23,6 +24,13 @@ export type DetailFieldMap<T> = {
   titleField?: keyof T;
   labels: Partial<Record<keyof T, string>>;
 };
+
+/** A string as an XPath 1.0 literal, also when it holds both ' and " (e.g. a label "Line's No"). */
+function xpathLiteral(text: string): string {
+  if (!text.includes("'")) return `'${text}'`;
+  if (!text.includes('"')) return `"${text}"`;
+  return `concat(${text.split("'").map((part) => `'${part}'`).join(`, "'", `)})`;
+}
 
 /**
  * Base class untuk semua Page Object.
@@ -162,10 +170,7 @@ export abstract class BasePage {
     if (key) {
       // <td data-col-key> has no id; the key is the most stable hook (AUTOMATION_RULES 8.4).
       const cell = row.locator(`td[data-col-key="${key}"]`);
-      await expect(
-        cell,
-        `No cell with data-col-key="${key}" for column "${column}"`,
-      ).toHaveCount(1);
+      await expect(cell, `No cell with data-col-key="${key}" for column "${column}"`).toHaveCount(1);
       return cell;
     }
     const index = await this.listColumnIndex(column);
@@ -221,8 +226,7 @@ export abstract class BasePage {
             .slice(0, 600),
         )
         .catch(() => "(cell not readable)");
-      if (e instanceof Error)
-        e.message += `\nCell HTML (styles removed): ${html}`;
+      if (e instanceof Error) e.message += `\nCell HTML (styles removed): ${html}`;
       throw e;
     }
   }
@@ -237,16 +241,11 @@ export abstract class BasePage {
    * Several cells of one row. string = text; boolean = Active badge for the Active
    * column, Yes/No icon for every other column. undefined = not checked.
    */
-  async expectListValues(
-    rowKey: string,
-    values: Record<string, string | boolean | undefined>,
-  ) {
+  async expectListValues(rowKey: string, values: Record<string, string | boolean | undefined>) {
     for (const [column, value] of Object.entries(values)) {
       if (value === undefined) continue;
-      if (typeof value === "string")
-        await this.expectListCell(rowKey, column, value);
-      else if (column === LIST_ACTIVE_COLUMN)
-        await this.expectListActive(rowKey, value);
+      if (typeof value === "string") await this.expectListCell(rowKey, column, value);
+      else if (column === LIST_ACTIVE_COLUMN) await this.expectListActive(rowKey, value);
       else await this.expectListBoolean(rowKey, column, value);
     }
   }
@@ -358,7 +357,6 @@ export abstract class BasePage {
     await this.clickDetailDeactivate();
     if (opts.confirmMessage) await this.expectDialogText(opts.confirmMessage);
     await this.confirmDialog("Deactivate");
-    await this.page.waitForTimeout(2000);
   }
 
   /** Activate on the LIST (rows must be selected first): More → Activate. */
@@ -410,9 +408,7 @@ export abstract class BasePage {
    * cf-row-14-..., ...): only their prefix "cf-row-" and their suffix are stable.
    */
   protected customFilterPanel(): Locator {
-    return this.page
-      .locator("form")
-      .filter({ has: this.page.getByTestId("cf-apply") });
+    return this.page.locator("form").filter({ has: this.page.getByTestId("cf-apply") });
   }
 
   /**
@@ -473,10 +469,7 @@ export abstract class BasePage {
     const option = this.listOption(name);
     const shown = await option
       .waitFor({ state: "visible", timeout: 2000 })
-      .then(
-        () => true,
-        () => false,
-      );
+      .then(() => true, () => false);
     if (!shown) {
       const typeable = await control.evaluate(
         (el) => el instanceof HTMLInputElement && !el.readOnly && !el.disabled,
@@ -593,10 +586,7 @@ export abstract class BasePage {
     const shown = await dialog
       .first()
       .waitFor({ state: "visible", timeout: 3000 })
-      .then(
-        () => true,
-        () => false,
-      );
+      .then(() => true, () => false);
     if (!shown) return;
     const save = dialog.getByRole("button", { name: "Save", exact: true });
     if ((await save.count()) > 0) await save.click();
@@ -625,17 +615,26 @@ export abstract class BasePage {
   }
 
   /**
-   * Detail view field value: the first element after the label. DOM:
-   * <div>
-   *   <div><p>{Label}</p></div>
-   *   <p>{Value}</p>              <- text value
-   *   or <a href="...">{Value}</a> / <p><a>{Value}</a></p>   <- hyperlink value
-   * </div>
+   * Detail view field value, found from its label for any of the Lumina layouts
+   * (AUTOMATION_RULES Section 9.2):
+   *
+   *   A. Label wrapped:   <div><div><p>{Label}</p>[icon]</div><p|a>{Value}</p|a></div>
+   *   B. Label and value side by side (card, e.g. Area data on Production Lines):
+   *                       <div><p>{Label}</p><p>{Value}</p></div>
+   *   C. Same as B with other tags, e.g. <dt>{Label}</dt><dd>{Value}</dd>.
+   *
+   * Rule: the label is an element whose whole text is {Label} and that is the first element
+   * of its parent. The value is the first element with visible text after the label (B, C);
+   * when the label has none after it, the first element with visible text after the label's
+   * parent (A). "Visible text" skips icons: their <svg> and <style> text does not count, so an
+   * info icon next to a label is never taken as the value. An empty value shows "-", which is text.
    */
   protected detailValue(label: string): Locator {
-    return this.page.locator(
-      `xpath=//div[p[normalize-space()='${label}']]/following-sibling::*[1]`,
-    );
+    const text = "[.//text()[normalize-space()][not(ancestor::style) and not(ancestor::script)]]";
+    const labelEl = `//*[not(preceding-sibling::*)][normalize-space()=${xpathLiteral(label)}][not(*[normalize-space()=${xpathLiteral(label)}])]`;
+    const sideBySide = `${labelEl}/following-sibling::*${text}[1]`;
+    const wrapped = `${labelEl}[not(following-sibling::*${text})]/parent::*/following-sibling::*${text}[1]`;
+    return this.page.locator(`xpath=${sideBySide} | ${wrapped}`);
   }
 
   /** The hyperlink of a detail field: the value element itself, or a link inside it. */
@@ -663,7 +662,19 @@ export abstract class BasePage {
    */
   async expectDetailValue(label: string, value: string) {
     const shown = value.trim() === "" ? DETAIL_EMPTY_DISPLAY : value.trim();
-    await expect(this.detailValue(label)).toHaveText(shown);
+    const locator = this.detailValue(label);
+    try {
+      await expect(locator).toHaveText(shown);
+    } catch (e) {
+      // Say what the label resolved to: no value (new layout?) or several (same label twice).
+      const found = await locator.allInnerTexts().catch(() => [] as string[]);
+      if (e instanceof Error) {
+        e.message += `\nDetail label "${label}" resolved to ${found.length} value(s): ${JSON.stringify(found)}.` +
+          (found.length === 0 ? " No value found: check the detail view DOM against AUTOMATION_RULES 9.2." : "") +
+          (found.length > 1 ? " The label shows more than once: the check needs a narrower scope." : "");
+      }
+      throw e;
+    }
   }
 
   /**
@@ -678,9 +689,7 @@ export abstract class BasePage {
       const value = expected[key];
       if (value === undefined) continue;
       if (typeof value !== "string") {
-        throw new Error(
-          `Detail field "${String(key)}" is not text; check it separately.`,
-        );
+        throw new Error(`Detail field "${String(key)}" is not text; check it separately.`);
       }
       if (key === map.titleField) {
         await this.expectDetailOpened(value);
@@ -688,9 +697,7 @@ export abstract class BasePage {
       }
       const label = map.labels[key];
       if (!label) {
-        throw new Error(
-          `No detail label for field "${String(key)}". Add it to DETAIL_LABELS.`,
-        );
+        throw new Error(`No detail label for field "${String(key)}". Add it to DETAIL_LABELS.`);
       }
       await this.expectDetailValue(label, value); // text or hyperlink, see detailValue()
     }
@@ -714,13 +721,26 @@ export abstract class BasePage {
   }
 
   /**
-   * A message is shown somewhere on the page (inline, toast or modal), exact text.
-   * Use it when the FSD does not say where the message shows.
+   * A message is shown somewhere on the page (inline, toast or modal): exact text (string)
+   * or an anchored pattern (RegExp). Use it when the FSD does not say where the message shows.
    */
-  async expectMessage(message: string) {
-    await expect(
-      this.page.getByText(message, { exact: true }).first(),
-    ).toBeVisible();
+  async expectMessage(message: string | RegExp) {
+    const text =
+      typeof message === "string"
+        ? this.page.getByText(message, { exact: true })
+        : this.page.getByText(message);
+    await expect(text.first()).toBeVisible();
+  }
+
+  /**
+   * The list or the record page could not load its data (server error, HTTP 5xx):
+   * the standard Lumina message LOAD_FAILED_TEXT, on two lines
+   * "We couldn't load the data due to a system issue." / "Please try again.".
+   * Same for every menu: do not use the per-menu FSD text. Its place on the page (page body,
+   * toast or modal) is not confirmed yet, so the whole page is searched.
+   */
+  async expectLoadFailed() {
+    await this.expectMessage(LOAD_FAILED_MESSAGE);
   }
 
   /**

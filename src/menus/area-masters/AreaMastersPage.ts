@@ -34,13 +34,10 @@ const DETAIL_FIELDS: DetailFieldMap<AreaMaster> = {
  * required (inline), duplicate (toast, duplicateRecordMessage), delete of an area in use
  * (toast, STD_MESSAGES.deleteInUse — replaces the FR-80 "These areas cannot be deleted..." text),
  * concurrency (STD_DIALOGS), delete confirmation (deleteConfirmMessage — replaces the FR-80
- * "Delete {N} areas?" / "Delete area {Name}?" texts).
+ * "Delete {N} areas?" / "Delete area {Name}?" texts), list / area page load failed
+ * (LOAD_FAILED_TEXT, BasePage.expectLoadFailed — replaces the FR-10 / FR-20 texts).
  */
 export const AM_MESSAGES = {
-  listLoadFailed:
-    "Areas could not be loaded. Please refresh the page or contact IT support.",
-  detailLoadFailed:
-    "This area could not be loaded. Please refresh the page or contact IT support.",
   saveFailed:
     "The change could not be saved. Please try again or contact IT support.",
   areasNoLongerExist: (names: string[]) =>
@@ -123,8 +120,7 @@ export class AreaMastersPage extends BasePage {
     data: Partial<AreaMaster>,
     opts: { byFactory?: string } = {},
   ) {
-    if (opts.byFactory)
-      await this.openDetailByColumn("Factory", opts.byFactory);
+    if (opts.byFactory) await this.openDetailByColumn("Factory", opts.byFactory);
     else await this.openDetailByColumn("Name", name);
     await this.expectDetailOpened(name);
     await this.clickEdit();

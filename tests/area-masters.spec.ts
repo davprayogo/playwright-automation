@@ -32,6 +32,8 @@
  * Messages: generic checks expect MOM-0029 (STD_MESSAGES / STD_DIALOGS), as FSD Section 9
  * states; MOM-98 business rules expect the FSD text (AM_MESSAGES). Where the FSD does not
  * say where a message shows, the test only checks that the exact text is on the page.
+ * List / area page fails to load (004, 007): the standard Lumina text "We couldn't load the data
+ * due to a system issue. Please try again." (expectLoadFailed), not the FSD FR-10 / FR-20 texts.
  * Toasts (confirmed in the UI, AUTOMATION_RULES Section 10): a duplicate Factory + Name
  * (016, 023) and the delete of an area in use (035) show a toast, not the MOM-0029
  * "Duplicate Record" modal / the MOM-98 FR-80 text. See expectToast(), duplicateRecordMessage().
@@ -123,7 +125,7 @@ test.describe("MOM-98 Area Masters", () => {
     await failApi(page, AM_API, ["GET"]);
 
     await areaPage.goto(areaPage.path);
-    await areaPage.expectMessage(AM_MESSAGES.listLoadFailed);
+    await areaPage.expectLoadFailed(); // standard text, not the FSD FR-10 text
 
     await attachScreenshot(page, testInfo, shot("TC-MOM98-004 List view"));
   });
@@ -143,7 +145,7 @@ test.describe("MOM-98 Area Masters", () => {
     await areaPage.open();
     await failApi(page, AM_API, ["GET"]);
     await areaPage.openDetailByColumn("Name", name);
-    await areaPage.expectMessage(AM_MESSAGES.detailLoadFailed);
+    await areaPage.expectLoadFailed(); // standard text, not the FSD FR-20 text
 
     await attachScreenshot(page, testInfo, shot("TC-MOM98-007 Detail view"));
   });

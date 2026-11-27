@@ -35,6 +35,8 @@
  *  - 046 (Quick Search: its DOM / test ids are not known yet)
  *
  * Messages: STD_MESSAGES, STD_DIALOGS, PLM_MESSAGES, duplicateRecordMessage, maxLengthMessage.
+ * List / line page fails to load (004, 006): the standard Lumina text "We couldn't load the data
+ * due to a system issue. Please try again." (expectLoadFailed), not the FSD FR-10 / FR-20 texts.
  * Duplicate code and the delete-in-use messages are checked as toasts (confirmed UI; the FSD
  * says modal for duplicate: open conflict). Delete confirmation: "Delete 1 Record?" / "Delete {n} Records?".
  * "Another user": a second page in the same browser context (same login).
@@ -164,7 +166,7 @@ test.describe("MOM-99 Production Line Masters", () => {
     await failApi(page, PL_API, ["GET"]);
 
     await plPage.goto(plPage.path);
-    await plPage.expectMessage(PLM_MESSAGES.listLoadFailed);
+    await plPage.expectLoadFailed(); // standard text, not the FSD FR-10/FR-20 text
 
     await attachScreenshot(page, testInfo, shot("TC-MOM99-004 List view"));
   });
@@ -189,7 +191,7 @@ test.describe("MOM-99 Production Line Masters", () => {
     await plPage.open();
     await failApi(page, PL_API, ["GET"]);
     await plPage.openDetailByColumn("Code", code);
-    await plPage.expectMessage(PLM_MESSAGES.detailLoadFailed);
+    await plPage.expectLoadFailed(); // standard text, not the FSD FR-10/FR-20 text
 
     await attachScreenshot(page, testInfo, shot("TC-MOM99-006 Detail view"));
   });

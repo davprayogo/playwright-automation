@@ -78,6 +78,28 @@ export function deleteConfirmMessage(count: number): string {
 export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
+ * Page load failed on a server error (HTTP 5xx) — the list or the record page could not load its
+ * data. Standard Lumina text for every menu; replaces the per-menu FSD texts
+ * ("Production lines could not be loaded. ...", "Areas could not be loaded. ...").
+ * Shown on two lines:
+ *   We couldn't load the data due to a system issue.
+ *   Please try again.
+ */
+export const LOAD_FAILED_TEXT = "We couldn't load the data due to a system issue.\nPlease try again.";
+
+/**
+ * Exact (anchored) pattern of LOAD_FAILED_TEXT: any white space or none between the two lines
+ * (line break, <br> or two elements), and a straight or curly apostrophe in "couldn't".
+ */
+export const LOAD_FAILED_MESSAGE = new RegExp(
+  "^\\s*" +
+    LOAD_FAILED_TEXT.split("\n")
+      .map((line) => escapeRegExp(line).replace("'", "['\u2019]"))
+      .join("\\s*") +
+    "\\s*$",
+);
+
+/**
  * Toast. Duplicate unique value(s) (MOM-0029 FR-480 text; shown as a toast in the UI,
  * not as the "Duplicate Record" modal). Fields in the configured unique order:
  *   1 field : Another record already has the same {Field}: {Value}. It may be inactive. Please use different values.
