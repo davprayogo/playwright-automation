@@ -101,7 +101,10 @@ const DETAIL_FIELDS: DetailFieldMap<ProductionLineDetail> = {
   labels: DETAIL_LABELS,
 };
 
-type ReferenceField = "processMaster" | "storageLocation" | "repairStorageLocation";
+type ReferenceField =
+  | "processMaster"
+  | "storageLocation"
+  | "repairStorageLocation";
 
 /** Text and reference fields of the form (toggles excluded). */
 export type PlmTextOrRefField = TextField;
@@ -124,7 +127,8 @@ export const PLM_MAX_LENGTH = {
 export const PLM_MESSAGES = {
   /** FR-90, inline under Repair Storage Location. */
   repairSameAsStorage: "Must be different from Storage Location",
-  saveFailed: "The change could not be saved. Please try again or contact IT support.",
+  saveFailed:
+    "The change could not be saved. Please try again or contact IT support.",
 } as const;
 // List / line page load failed (FR-10, FR-20): standard text, BasePage.expectLoadFailed().
 
@@ -150,13 +154,16 @@ export class ProductionLineMastersPage extends BasePage {
     externalCode: "pl-external-code",
   };
   private input = (field: PlmTextOrRefField) =>
-    this.page.getByTestId(`${ProductionLineMastersPage.FIELD_IDS[field]}-input`);
+    this.page.getByTestId(
+      `${ProductionLineMastersPage.FIELD_IDS[field]}-input`,
+    );
   private inputCode = () => this.input("code");
   private inputName = () => this.input("name");
   private inputLineNo = () => this.input("lineNo");
   private inputProcessMaster = () => this.input("processMaster");
   private inputStorageLocation = () => this.input("storageLocation");
-  private inputRepairStorageLocation = () => this.input("repairStorageLocation");
+  private inputRepairStorageLocation = () =>
+    this.input("repairStorageLocation");
   private inputExternalCode = () => this.input("externalCode");
 
   /**
@@ -174,7 +181,7 @@ export class ProductionLineMastersPage extends BasePage {
   private static readonly TOGGLE_IDS: Record<keyof PlmToggles, string> = {
     productionLine: "pl-is-production-line",
     twoStepTransfer: "pl-is-two-step-transfer",
-    autoTransferToRepair: "pl-is-auto-repair-to-transfer",
+    autoTransferToRepair: "pl-is-auto-transfer-to-repair",
   };
 
   // ---------- Navigation ----------
@@ -251,7 +258,9 @@ export class ProductionLineMastersPage extends BasePage {
    * Fill the form that is already open (New, or Edit after clickEdit), without saving.
    * Use saveNew(code) to save it: it works for New and Edit.
    */
-  async fill(data: Partial<Omit<ProductionLineMaster, "code">> & { code?: string }) {
+  async fill(
+    data: Partial<Omit<ProductionLineMaster, "code">> & { code?: string },
+  ) {
     await this.fillForm(data);
   }
 
@@ -314,7 +323,8 @@ export class ProductionLineMastersPage extends BasePage {
     expected: Partial<ProductionLineMaster> & ProductionLineDerived,
   ) {
     const text: Partial<ProductionLineDetail> = { ...expected };
-    for (const key of TOGGLE_KEYS) delete (text as Record<string, unknown>)[key];
+    for (const key of TOGGLE_KEYS)
+      delete (text as Record<string, unknown>)[key];
     await this.expectDetailFields(text, DETAIL_FIELDS);
   }
 
@@ -340,7 +350,8 @@ export class ProductionLineMastersPage extends BasePage {
    * Candidate for BasePage once a second menu needs it.
    */
   async expectColumnsHidden(columns: readonly string[]) {
-    for (const column of columns) await expect(this.listHeader(column)).toHaveCount(0);
+    for (const column of columns)
+      await expect(this.listHeader(column)).toHaveCount(0);
   }
 
   /**
@@ -357,21 +368,35 @@ export class ProductionLineMastersPage extends BasePage {
       index,
     );
     const found = shown.filter((code) => codes.includes(code));
-    expect(found, `Codes on the loaded page, in list order (all shown: ${shown.length})`).toEqual([...codes]);
+    expect(
+      found,
+      `Codes on the loaded page, in list order (all shown: ${shown.length})`,
+    ).toEqual([...codes]);
   }
 
   /** The same inline error shows under each field. */
   async expectFieldErrors(fields: PlmTextOrRefField[], message: string) {
     for (const field of fields) {
-      await this.expectFieldError(ProductionLineMastersPage.FIELD_IDS[field], message);
+      await this.expectFieldError(
+        ProductionLineMastersPage.FIELD_IDS[field],
+        message,
+      );
     }
   }
 
   /** One inline error per field, each with its own text. */
-  async expectFieldErrorsEach(errors: Partial<Record<PlmTextOrRefField, string>>) {
-    for (const [field, message] of Object.entries(errors) as [PlmTextOrRefField, string | undefined][]) {
+  async expectFieldErrorsEach(
+    errors: Partial<Record<PlmTextOrRefField, string>>,
+  ) {
+    for (const [field, message] of Object.entries(errors) as [
+      PlmTextOrRefField,
+      string | undefined,
+    ][]) {
       if (message !== undefined) {
-        await this.expectFieldError(ProductionLineMastersPage.FIELD_IDS[field], message);
+        await this.expectFieldError(
+          ProductionLineMastersPage.FIELD_IDS[field],
+          message,
+        );
       }
     }
   }
